@@ -1,0 +1,100 @@
+# 不进版本库的东西
+
+# --- 含密钥的服务端配置 ---
+# config.php 里有口令哈希和高德 key，绝不能提交。
+# 进仓库的是模板 config.example.php。
+code/api/config.php
+
+# --- 运行时数据 ---
+# trips.json 是站点数据不是源码；rl/ 是限流计数，cache/ 是地理编码缓存。
+# 但两处的 .htaccess 是源码，必须保留。
+code/data/*
+!code/data/.htaccess
+
+# --- 上传的照片 ---
+code/uploads/*
+!code/uploads/.htaccess
+
+# --- 旅行照片素材（导入前的原图/压缩版/汇总，属私人数据不进仓库）---
+图片/
+
+# --- 浏览器配置目录（含登录数据、Cookie、历史记录，绝不提交）---
+_shot/
+_chrometmp*/
+_ct/
+
+# --- 第三方参考资料（下载来的设计规范合集，不属于本站）---
+code/awesome-design-md-main/
+
+# --- 工具状态 ---
+.workbuddy/
+
+# --- 临时文件 ---
+_*.txt
+_*.py
+*.tmp
+*.log
+*.bak
+
+# --- 系统文件 ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- 验证工具的输出（配置本身保留，输出不留）---
+_probe.txt
+_*.json
+tools/*.out.txt
+tools/*.out.json
+_commitmsg.txt
+_tagmsg.txt
+_commit_result.txt
+_st.txt
+
+# --- 验证截图（可随时用 tools/probe.mjs 重新生成）---
+_shots/
+
+# --- 字体生成的中间产物（源字体 23MB，不进仓库）---
+_fontsrc/
+tools/shots/
+_fontchars.txt
+_fc.txt
+_fc.woff2
+
+# --- 本地 Python 虚拟环境（装工具用，如 pillow）---
+.venv*/
+venv/
+
+# --- 临时脚本（命名统一用 zz- 前缀，便于一眼认出）---
+zz-*
+
+# ZCode 工具配置与一次性素材
+.zcode/
+ChatGPT Image *.png
+
+# --- 3D 生成产物（55MB GLB + 44MB OBJ，随时可重新生成，不进仓库）---
+3d/out/
+3d/ref.b64
+probe.out.*
+_rv*.json
+_rv*.txt
+
+# --- 开源化（2026-10-27）：内部文档与私人产物一律不进公开仓库 ---
+# 内部工作文档（含私人信息）集中放在 _private/，只在本地保留
+_private/
+# 历史内部文档（已移入 _private/，规则兜底防误提交）
+生日剧本.md
+设计蓝图.md
+后端设计-PHP.md
+部署指南-InfinityFree.md
+风险评审.md
+技术评审.md
+代码审查报告*.md
+改进建议*.md
+方案规划.md
+预览-*.png
+# 一次性导入脚本（含真实地名）与探针配置（含旧信稿）
+tools/build-trips.py
+tools/checks-*.json
+tools/checks-archive/
+tools/gen-cake-*.py

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="clay" data-effects="full">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF9F5">
+
+<script>
+/* 首帧之前就把主题定下来。
+   原来 data-theme 写死在 <html> 上，要等 theme.js 这个模块加载完才覆盖，
+   首帧会先按默认主题画一次再跳过去 —— 慢网下能明显看到闪一下。
+   放在样式表之前执行，就没有这一段。
+   存的是 JSON 字符串（dom.js 的 store 用 JSON.stringify），所以要 JSON.parse。
+   localStorage 在隐私模式下会抛异常，必须包一层。 */
+(function () {
+  try {
+    var t = JSON.parse(localStorage.getItem("theme") || "null");
+    if (t === "clay" || t === "clay-night") {
+      document.documentElement.dataset.theme = t;
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", t === "clay-night" ? "#181715" : "#FAF9F5");
+    }
+  } catch (e) { /* 隐私模式：用 HTML 上的默认值 */ }
+})();
+</script>
+
+<title>给小满的</title>
+<meta name="description" content="给小满的生日礼物。我们一起走过的每个地方，都在这里。">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="给小满的">
+<meta property="og:description" content="给小满的生日礼物。我们一起走过的每个地方，都在这里。">
+<meta property="og:image" content="assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="生日快乐，给你的。">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/favicon.svg">
+
+<!-- 衬线子集要在首屏大字之前就开始下载，否则慢网下标题先以无衬线画出再跳变 -->
+<link rel="preload" href="assets/NotoSerifSC-subset.woff2" as="font" type="font/woff2" crossorigin>
+
+<link rel="stylesheet" href="css/themes.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/scenes.css">
+</head>
+<body>
+
+<!-- 背景星云与鼠标柔光：纯装饰，不参与交互 -->
+<div id="app" class="app"></div>
+
+<div id="boot" class="boot">
+  <div class="boot-dot"></div>
+</div>
+
+<noscript>
+  <!-- ⚠️ 必须把 .boot 藏掉。它是 position:fixed; inset:0; z-index:90 的
+       不透明遮罩，.is-done 只由 JS 加（JS 兜底也是 JS）—— JS 禁用时
+       两者都不发生，用户只看到一个永远转圈的呼吸点，下方这句话完全看不见。 -->
+  <style>.boot { display: none !important; }</style>
+  <div class="noscript">
+    <p>这个页面需要开启 JavaScript 才能打开。</p>
+  </div>
+</noscript>
+
+<script>
+/* 加载失败兜底：如果主脚本没跑起来，不要让页面一直转圈。
+   只关心"启动完成之前"的错误，启动之后不再干预。 */
+(function () {
+  var done = false;
+  function bail() {
+    if (done || window.__appBooted) return;
+    done = true;
+    var boot = document.getElementById('boot');
+    var app = document.getElementById('app');
+    if (boot) boot.classList.add('is-done');
+    if (app && app.children.length === 0) {
+      /* ⚠️ 颜色必须用 var(--text) 系列。原来写死 color:#141413，
+         而 clay-night 的 --bg 是 #181715 —— 对比度约 1.05:1，
+         **恰好在这个最需要提示的失败路径上完全看不见**。 */
+      app.innerHTML =
+        '<div style="max-width:520px;margin:0 auto;padding:48px 24px;text-align:center;font-size:14px;line-height:1.9;color:var(--text-2)">'
+        + '<div style="color:var(--text);font-size:16px;margin-bottom:10px">页面没能正常加载</div>'
+        + '先刷新一次。如果还是这样，多半是 js 目录没有完整上传。'
+        + '</div>';
+    }
+  }
+  window.addEventListener('error', function () { bail(); }, true);
+  setTimeout(bail, 7000);
+})();
+</script>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

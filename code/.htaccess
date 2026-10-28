@@ -1,0 +1,101 @@
+# ==========================================================================
+# 站点根目录 .htaccess
+# 部署顺序很重要：先确认 SSL 证书已生效，再启用最后那段强制 HTTPS，
+# 否则会造成重定向循环。
+# ==========================================================================
+
+# 关闭目录列表本应写 Options -Indexes，但这里刻意不写。
+# InfinityFree 这类共享主机的 AllowOverride 默认不含 Options，
+# 遇到该指令会直接返回 500 —— 而这里是站点根目录，500 意味着整站打不开。
+# 权衡：目录枚举的风险远小于整站打不开。真正的防线是下面那条
+# <FilesMatch "^\."> 和 api/ 的鉴权。
+
+# --------------------------------------------------------------------------
+# SPA 路由回退
+# --------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# 404 交给前端处理
+ErrorDocument 404 /index.html
+
+# --------------------------------------------------------------------------
+# MIME 类型（部分 Apache 未内置 webp / woff2）
+# --------------------------------------------------------------------------
+<IfModule mod_mime.c>
+  AddType image/webp .webp
+  AddType font/woff2 .woff2
+  AddType application/javascript .js
+  AddType model/gltf-binary .glb
+</IfModule>
+
+# --------------------------------------------------------------------------
+# 缓存
+# index.html 必须 no-cache，否则你改了内容她刷新还是旧版。
+# js/css 也是 no-cache（只要求 304 重校验）：零构建站点的文件名不带版本号，
+# 若给它们 7 天强缓存，每次改完上传，回访的浏览器最长 7 天拿不到新代码。
+# 代价只是每次回访多几个 304 往返，文件都很小，值得。
+# 字体/图片内容基本不变，可以长缓存。
+# --------------------------------------------------------------------------
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|css)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+  <FilesMatch "\.(woff2|svg)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+  <FilesMatch "\.(webp|jpg|jpeg|png|gif)$">
+    Header set Cache-Control "public, max-age=2592000"
+  </FilesMatch>
+  <FilesMatch "\.glb$">
+    Header set Cache-Control "public, max-age=2592000"
+  </FilesMatch>
+  <FilesMatch "\.(html|json)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "same-origin"
+</IfModule>
+
+# --------------------------------------------------------------------------
+# Gzip
+# --------------------------------------------------------------------------
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css
+  AddOutputFilterByType DEFLATE application/javascript application/json
+  AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# --------------------------------------------------------------------------
+# 禁止直接访问隐藏文件与配置
+# --------------------------------------------------------------------------
+<FilesMatch "^\.">
+  Require all denied
+</FilesMatch>
+
+<FilesMatch "\.(md|log|bak|sql|ini|yml|yaml)$">
+  Require all denied
+</FilesMatch>
+
+# --------------------------------------------------------------------------
+# 强制 HTTPS
+#
+# 刻意不在 .htaccess 里做，改由 api/config.php 的 force_https 开关控制。
+#
+# 原因有两个：
+#   1. InfinityFree 的 HTTPS 由反向代理终止，%{HTTPS} 即使真的走了 https
+#      也经常是 off —— 直接用 RewriteCond %{HTTPS} off 会陷入无限重定向。
+#   2. 一旦证书还没配好就启用，整站会被跳转打死，连管理页都进不去。
+#
+# 正确顺序：先跑 api/probe.php，等「HTTPS 访问」那一项变绿，
+# 再去 api/config.php 把 force_https 改成 true。
+# 那一步在 PHP 层生效，出问题改回 false 就能立刻恢复。
+# --------------------------------------------------------------------------

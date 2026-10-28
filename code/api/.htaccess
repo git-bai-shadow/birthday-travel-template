@@ -1,0 +1,64 @@
+# ==========================================================================
+# api/.htaccess · 接口目录的访问控制
+#
+# 为什么需要：根 .htaccess 只挡了 `^\.` 开头和 .md/.log/.bak/.sql/.ini/.yml/.yaml，
+# **没有** api/.htaccess。config.php 于是位于文档根内且无目录级保护。
+# 它顶层是 `return [...]`，PHP 执行后输出为空，所以密钥不会直接泄露 ——
+# 但这把安全性完全押在"PHP 处理器正常工作"上：一旦 .php 关联错位，
+# 或者谁在里面误加一句 echo，password_hash 与 amap_key 就明文躺在公网目录里。
+#
+# 做法：默认拒绝整个目录，只用 FilesMatch 显式放行要执行的那几个脚本。
+# Apache 2.4 用 Require，2.2 用 Order/Allow —— 两种都写上，任一模块可用即生效。
+# ==========================================================================
+
+# --- Apache 2.4 ---
+<IfModule mod_authz_core.c>
+    <RequireAll>
+        Require all granted
+        <RequireNone>
+            Require all denied
+        </RequireNone>
+    </RequireAll>
+</IfModule>
+
+# --- Apache 2.2 ---
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>
+
+# --- 只放行这几个可执行脚本，其余（尤其 config.php）一律拒绝 ---
+<FilesMatch "^(auth|trips|upload|geocode)\.php$">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Allow from all
+    </IfModule>
+</FilesMatch>
+
+# config.php 明确再拒一次（双保险，防止上面的 FilesMatch 规则被改动波及）
+<Files "config.php">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</Files>
+
+# 备份与临时文件一律不许被下载
+<FilesMatch "\.(bak|log|sql|ini|yml|yaml|md|tmp)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 目录索引一律关闭
+Options -Indexes

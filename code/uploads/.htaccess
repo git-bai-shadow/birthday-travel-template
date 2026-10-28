@@ -1,0 +1,44 @@
+# ==========================================================================
+# uploads/ 目录 · 照片可以公开读取，但绝对禁止执行任何脚本
+#
+# 为什么必须有这个文件：
+#   如果这里能执行 PHP，别人上传一个伪装成图片的脚本就能拿到整站控制权。
+#   上传接口已经做了真实类型校验，这里是第二道防线。
+# ==========================================================================
+
+# 这里原本还有一行 Options -ExecCGI -Indexes，已移除。
+# 共享主机的 AllowOverride 常常不含 Options，该指令会让整个 uploads 目录
+# 返回 500 —— 后果是所有照片都加载不出来，比它防的问题严重得多。
+# 下面「把脚本类型指向不存在的处理器」与 FilesMatch 拒绝访问这两段
+# 才是关键防线，它们不依赖 Options，保留即可。
+
+# 把脚本类型全部指向一个不存在的处理器
+<IfModule mod_mime.c>
+  RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phps .pht
+  RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8 .phps .pht
+  AddType text/plain .php .phtml .php3 .php4 .php5 .php7 .php8 .phps .pht
+</IfModule>
+
+# 共享主机多数不允许 php_flag，允许的话再加一层
+<IfModule mod_php.c>
+  php_flag engine off
+</IfModule>
+
+# 兜底：万一有脚本被写进来，也不让下载，避免被直接请求执行
+<FilesMatch "\.(php|phtml|php3|php4|php5|php7|php8|phps|pht|cgi|pl|py|sh)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# 图片长缓存
+<IfModule mod_headers.c>
+  <FilesMatch "\.(webp|jpg|jpeg|png)$">
+    Header set Cache-Control "public, max-age=2592000"
+    Header set X-Content-Type-Options "nosniff"
+  </FilesMatch>
+</IfModule>

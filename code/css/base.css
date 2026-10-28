@@ -1,0 +1,758 @@
+/* ==========================================================================
+   基础层 · 重置、骨架、分屏容器、通用组件
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   自托管衬线子集
+   安卓系统不带中文衬线字体，只写 font-family 是拿不到的 —— 必须内嵌。
+   子集只覆盖站内实际用到的 661 个字符（tools/font-subset.py 生成），
+   改完 config.js 的文案后重新跑一次那个脚本即可。
+   缺字时浏览器会沿 font-family 链退到无衬线，不会出现方框。
+   ⚠️ 这里的 url 是相对本 CSS 文件（css/）解析的，必须写 ../assets/。
+      曾写成 assets/（实际请求 /css/assets/… 永远 404），
+      一直没暴露是因为前面排着 local()——开发机装了完整字体就把 Web 字体
+      跳过了；她的手机没有本地字体，一上就退回无衬线。
+      local() 也一并去掉：所有设备统一用子集渲染，行为一致，
+      index.html 里的 preload 也才能命中。
+   -------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: "Noto Serif SC";
+  src: url("../assets/NotoSerifSC-subset.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --------------------------------------------------------------------------
+   情书手写体（v1.7.9）
+   只用于情书正文、署名、信封上的收信人 —— 全站别处一律衬线。
+   马善政毛笔楷书（Google Fonts，SIL OFL 1.1），子集只含情书幕用到的字
+   （约 60KB，见 tools/font-subset.py 的 letter_chars）。
+
+   ⚠️ font-display: swap 而不是 block：这一幕在第 2 屏，滚到之前早就下完了；
+     真遇上慢网，宁可先看到衬线再换，也不要让信纸空着等字体。
+   ⚠️ 后面必须跟着衬线兜底：手写体只有 163 个字，她要是改了信、出现子集
+     之外的字，会逐字退到衬线（个别字不手写），不会出现方框。
+     改完信稿记得重跑 tools/font-subset.py，否则新字就是衬线。
+   -------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: "Letter Hand";
+  src: url("../assets/LetterHand-subset.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 这两个变量由 js/main.js 从 config.js 写入：
+     --fs  全局字号缩放（ui.fontScale）
+     --col 内容列最大宽度（ui.maxWidth）
+   这个由 main.js 量出来写：
+     --sbw 浏览器滚动条占的宽度（覆盖层滚动条为 0px）—— 右侧固定的
+          进度点与设置入口要躲开它，否则会和滚动条压在同一条边上 */
+:root {
+  --fs: 1;
+  --col: 560px;
+  --sbw: 0px;
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--bg);
+  color-scheme: var(--scheme);
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  /* 防止下拉到头时触发浏览器刷新，把滚动手势打断 */
+  overscroll-behavior-y: none;
+
+  /* 常驻预留滚动条的位置（右侧那一列进度点会因此不再乱跳）。
+     Windows 桌面浏览器用的是「占位」滚动条：页面从矮变高（数据、照片加载完）
+     它才突然出现，把可视宽度挤窄 —— 固定定位的进度点/设置入口就被推到左边去，
+     滚动条一消失又弹回来。预留之后宽度恒定，出现与消失都不再挪动任何东西；
+     顺带解决解锁门加锁（overflow: hidden）时整页宽度跳动的问题。
+     不支持这条属性的浏览器只是维持原样，不会更糟。 */
+  scrollbar-gutter: stable;
+
+  /* 滚动条做细、跟随主题配色：它和进度点共用右边这一条边，
+     默认那个 15px 宽的亮灰滑块太抢，细轨道才不打架（Firefox）。
+     滑块用 --text-3 而不是 --line-strong：后者只有 18% 不透明度，
+     细滑块配上会淡到几乎看不见，滚动条毕竟是要被找到的东西。 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-3) transparent;
+}
+
+/* WebKit / Blink（Chrome、Edge、微信内置浏览器）细轨道 + 圆角滑块。
+   滑块用透明边框收窄到 4px，但**轨道仍占 10px** —— 占位宽度必须和
+   scrollbar-gutter 预留的一致，否则又会出现宽度跳动。 */
+html::-webkit-scrollbar { width: 10px; height: 10px; }
+html::-webkit-scrollbar-track { background: transparent; }
+html::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--text-3);
+  background-clip: content-box;
+}
+html::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+  background-clip: content-box;
+}
+html::-webkit-scrollbar-corner { background: transparent; }
+
+body {
+  font-family: var(--sans);
+  font-size: calc(16px * var(--fs));
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--bg);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 主题切换时全局过渡
+   ⚠️ `.btn` 已从这份列表里移除 —— 按钮要自己控制transform / box-shadow 的
+   过渡，而 `transition` 是整体覆盖的：只要它还留在这里，上面 .btn 自己写的
+   transition 会被这条规则整个替换掉。 */
+body,
+.scene,
+.card {
+  transition: background-color var(--dur-base) var(--ease-out-quart),
+              color var(--dur-base) var(--ease-out-quart),
+              border-color var(--dur-base) var(--ease-out-quart);
+}
+
+img { max-width: 100%; display: block; }
+button { font: inherit; color: inherit; }
+a { color: var(--accent); }
+
+/* --------------------------------------------------------------------------
+   键盘焦点兜底
+
+   之前只有 .btn 和 .env__hit 有焦点环，另有十二个可聚焦控件（dock 入口、
+   switch、chip、分段控件、地图缩放、灯箱箭头、照片、拼图块…）完全没指示，
+   键盘用户等于看不见自己在哪。
+
+   只对 :focus-visible 生效 —— 鼠标点击不触发，触屏不触发。
+   放在 base.css 靠前位置，各组件可在自己的 :focus-visible 里覆盖。
+   -------------------------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* --------------------------------------------------------------------------
+   分屏容器
+
+   这里原本开了 scroll-snap-type 做「一幕一屏」的吸附，已移除。实测问题：
+
+     1. 浏览器实际按 mandatory 执行（计算值是 'y'），不是源码写的 proximity。
+        九幕里八幕正好是整屏高，吸附点密到几乎等同于强制翻页。
+     2. footprints 那一幕高 949px（比视口高 105px），且被设成不参与吸附，
+        于是它在 1688px 与 3481px 之间留下一段 1793px 的区间 ——
+        这段里一个可停靠点都没有，浏览器只能和用户的手势抢，
+        滚起来就是一卡一卡，停下来也常停在没对齐的位置。
+
+   现在完全交给自由滚动；要跳转到某一幕，仍由右侧进度点和解锁后的引导
+   调 scrollTo({ behavior: 'smooth' }) 精确完成。
+   -------------------------------------------------------------------------- */
+
+.scene {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--pad) + env(safe-area-inset-top)) var(--pad)
+           calc(var(--pad) + env(safe-area-inset-bottom));
+
+  /* 背景层次：顶部一层极淡暖光 + 底部一层极淡微沉。
+     九幕共用一个 --bg 纯色是这个站一直「平」的原因；这里不加新色相，
+     只用 --bg 派生的三档暖意，且各幕强度一致（逐幕只改 --lift），
+     所以不会出现明暗跳变。 */
+  --lift: var(--bg-lift-1);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% -10%, var(--lift), transparent 70%),
+    linear-gradient(to bottom, transparent 0%, var(--lift) 100%);
+  background-repeat: no-repeat;
+  /* ⚠️ 必须是 scroll，不能是 fixed —— fixed 会让这层渐变在安卓上
+     每帧跟着视口重算，是安卓滚动卡顿的常见来源。 */
+  background-attachment: scroll;
+}
+
+/* 高度自适应的一屏：用于旅行足迹这类内部有长滚动的场景 */
+.scene--flow {
+  min-height: auto;
+  padding-bottom: calc(var(--pad) * 2);
+}
+
+.scene__inner {
+  width: 100%;
+  max-width: var(--col);
+  margin: 0 auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.scene--flow .scene__inner { justify-content: flex-start; }
+
+/* --------------------------------------------------------------------------
+   排版
+   -------------------------------------------------------------------------- */
+
+.display {
+  font-family: var(--serif);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+/* perspective 让逐字入场的 rotateX 有真实纵深，不加则退化成扁平缩放 */
+.display--xl {
+  font-size: clamp(calc(44px * var(--fs)), calc(14vw * var(--fs)), calc(76px * var(--fs)));
+  perspective: 1200px;
+}
+.display--lg { font-size: clamp(calc(30px * var(--fs)), calc(9vw * var(--fs)), calc(44px * var(--fs))); }
+.display--md { font-size: clamp(calc(22px * var(--fs)), calc(6.4vw * var(--fs)), calc(30px * var(--fs))); }
+
+.lead {
+  font-size: clamp(calc(15px * var(--fs)), calc(4.2vw * var(--fs)), calc(17px * var(--fs)));
+  color: var(--text-2);
+  line-height: 1.9;
+  margin: 0;
+}
+
+.muted { color: var(--text-3); }
+.num { font-variant-numeric: tabular-nums; font-family: var(--mono); }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* --------------------------------------------------------------------------
+   按钮
+   -------------------------------------------------------------------------- */
+
+/* --------------------------------------------------------------------------
+   按钮
+
+   「交互通道」写法：基类只声明一组取值 + 写一次 transition，
+   变体只覆盖取值、绝不重写 transition —— 这是多个变体保持一致高级感的
+   全部秘密（否则每个变体各写一遍，久了必然漂移）。
+
+   --btn-lift     hover 抬起距离
+   --btn-press    按下缩放
+   --btn-ring     焦点环颜色
+   --btn-hover-bg hover 时的背景
+   -------------------------------------------------------------------------- */
+.btn {
+  --btn-lift: -2px;
+  --btn-press: 0.97;
+  --btn-ring: var(--accent);
+  --btn-hover-bg: var(--surface-2);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  cursor: pointer;
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  touch-action: manipulation;
+  /* 涟漪要用：position 定位 ::after，overflow 裁掉圆形外缘 */
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition: transform    var(--dur-instant) var(--ease-out-quart),
+              box-shadow  var(--dur-fast)    var(--ease-out-quart),
+              background-color var(--dur-fast) var(--ease-in-out-soft),
+              border-color     var(--dur-fast) var(--ease-in-out-soft),
+              color            var(--dur-fast) var(--ease-in-out-soft);
+}
+
+/* hover 抬起只在真有悬停能力的设备上生效。
+   触屏上 :hover 会「粘住」——点一下按钮，手离开前状态一直挂着。 */
+@media (hover: hover) {
+  .btn:hover {
+    transform: translateY(var(--btn-lift));
+    background-color: var(--btn-hover-bg);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.btn:active { transform: scale(var(--btn-press)); }
+
+.btn:focus-visible {
+  outline: 2px solid var(--btn-ring);
+  outline-offset: 3px;
+}
+
+/* 零 JS 涟漪：点按时从中心扩散。
+   松手后 scale 的过渡要延迟 0.5s 再跑，否则涟漪会跟着手指离开而「缩回去」，
+   看起来像没发生。 */
+.btn::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 160%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side,
+    color-mix(in srgb, var(--on-accent) 30%, transparent), transparent 70%);
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  z-index: -1;
+  pointer-events: none;
+  transition: transform 0.6s var(--ease-out-quart),
+              opacity   0.6s var(--ease-out-quart),
+              transform 0s 0.5s;
+}
+
+.btn:active::after,
+.btn:focus-visible::after {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.3, 1),
+              opacity 0s;
+}
+
+.btn--accent {
+  --btn-hover-bg: color-mix(in srgb, var(--accent-strong) 88%, var(--text));
+  --btn-ring: var(--accent-strong);
+  --btn-press: 0.96;
+  background-color: var(--accent-strong);
+  /* 纸纹：复用情书幕那套双向纤维（已上提到 :root）。
+     面板级质感的代价很低，repeating-linear-gradient 是零滤镜运算。 */
+  background-image: var(--paper-fibre);
+  border-color: transparent;
+  color: var(--on-accent);
+  font-weight: 500;
+}
+
+.btn--ghost {
+  --btn-lift: 0px;/* ghost 不抬起，只变个色 */
+  --btn-press: 0.98;
+  --btn-hover-bg: color-mix(in srgb, var(--text) 6%, transparent);
+  border-color: transparent;
+  background-color: transparent;
+  color: var(--text-2);
+}
+
+/* line：ghost 的「有轮廓版」。ghost 无边无底，浮在浅色纸面上时
+   轮廓几乎不可见（终幕两个按钮就是这个观感，被反馈「像纯文字」）。
+   这里描一条墨色细边 + 半透明纸底，让按钮边界清晰可辨。
+   同一组里并排的按钮都用它，保证两个看起来完全一致。 */
+.btn--line {
+  --btn-lift: -1px;
+  --btn-press: 0.98;
+  --btn-hover-bg: color-mix(in srgb, var(--text) 6%, transparent);
+  background-color: color-mix(in srgb, var(--surface) 60%, transparent);
+  border-color: color-mix(in srgb, var(--text) 32%, transparent);
+  color: var(--text);
+}
+
+/* subtle：比ghost 稍实一点。用于「日常模式顶部那个手动入口」这类
+   需要被看见、但不该抢主角的按钮。 */
+.btn--subtle {
+  --btn-lift: -1px;
+  --btn-hover-bg: color-mix(in srgb, var(--accent-soft) 70%, var(--surface));
+  background-color: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--accent-strong);
+  font-size: 13px;
+  padding: 9px 18px;
+}
+
+/* lite 档把纸纹关掉：与 body::after 的噪点一起降级，保持这个档的既定取舍 */
+[data-effects="lite"] .btn--accent { background-image: none; }
+
+/* --------------------------------------------------------------------------
+   卡片
+   -------------------------------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+}
+
+/* --------------------------------------------------------------------------
+   入场动画（滚动触发由 JS 添加 is-in）
+   -------------------------------------------------------------------------- */
+
+/* 入场动画
+   原来带 filter: blur(6px)。安卓中端机上每帧重算模糊，是首屏与滚动掉帧
+   的主因；而且 will-change 里没写 blur，浏览器反而无法提前提升图层。
+   去掉模糊，改成纯位移 + 透明度 —— 两者都走合成器。
+
+   --reveal-x / --reveal-y 让「从哪个方向来」变成可配置项，逐幕换轴向用
+   （否则九幕全是同一种自下而上，滚过去像在读同一份模板）。
+   --i 是同父元素内的序号，由 initReveal 写入，用于错峰。 */
+.reveal {
+  opacity: 0;
+  transform: translate(var(--reveal-x, 0px), var(--reveal-y, 16px));
+  transition: opacity var(--dur-slow) var(--ease-out-expo),
+              transform var(--dur-slow) var(--ease-out-expo);
+  /* 错峰间隔 70ms：--dur-slow 是 480ms，一幕内塞 3-4 个 → 最后一个延迟
+     210ms，总收尾 690ms，仍在 --dur-ceremony(900ms) 之内。
+     间隔不要超过 100ms，再大用户会明显感到「在等」。 */
+  transition-delay: calc(var(--i, 0) * 70ms);
+  /* ⚠️ 不要写常驻 will-change。`will-change: opacity` 单独就会强制创建
+     合成层 + 层叠上下文，即使 opacity 已是 1 也不释放。九幕约 20 个
+     .reveal，而且它们都是含整个 puzzle / scratch / letter-env 的包裹层
+     → 20 个常驻的大尺寸合成层，中端安卓上持续吃显存并触发纹理回收抖动。
+     transition 期间浏览器本来就会自动提升，用完即放。 */
+
+  /* --- 以下是「包裹层」需要的布局属性，两个坑都踩过 ---
+     ① display:block —— 里面的 .puzzle（width:min(100%,340px) +
+        aspect-ratio:1/1）会失去宽度约束、整块塌掉看不见。
+     ② 只写 display:flex 也不行 —— 父容器 .scene__inner 的
+        `align-items: center`（负责居中）**不会**继承给子容器，
+        子容器默认 `normal`(=stretch) 会把方块拉到左边缘，
+        实测拼图中心 194 / 容器中心 277，偏左 83px。
+        margin:auto 在 flex 里只管主轴（这里是垂直方向），管不到水平。
+     所以显式补 align-items:center。 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.reveal.is-in {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+
+/* 子元素恢复自身宽度约束：居中不该让定宽元素变形或被拉满。 */
+.reveal > * { max-width: 100%; }
+
+/* --------------------------------------------------------------------------
+   启动遮罩
+   -------------------------------------------------------------------------- */
+
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  transition: opacity 420ms ease, visibility 420ms ease;
+}
+
+.boot.is-done { opacity: 0; visibility: hidden; }
+
+.boot-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  animation: boot-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes boot-breathe {
+  0%, 100% { opacity: 0.25; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.15); }
+}
+
+.noscript {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-2);
+}
+
+/* --------------------------------------------------------------------------
+   设置入口（固定在第一页，离开首页就收起）
+   -------------------------------------------------------------------------- */
+
+/* 位置用 fixed，可见性由 main.js 按"当前是不是第一页"控制：
+   绝对定位不行 —— 日常模式的「第一页」是一张很长的页面，
+   absolute 会把它推到整页最底部，首屏根本看不见（上一版就是这么错的）。 */
+.dock {
+  position: fixed;
+  /* 让开滚动条：固定定位相对窗口外缘取值，
+     而桌面浏览器的滚动条正好占着最外侧那一竖条 —— 只写 14px 会被它压住。
+     --sbw 由 main.js 量出来后写入；覆盖层滚动条（手机）为 0，等于没变。 */
+  right: calc(14px + var(--sbw, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transition: opacity 320ms ease, visibility 320ms ease;
+}
+
+/* 滚出第一页就收起：不是"消失"，是这一页结束了 */
+.dock.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* 圆形图标按钮。44×44 是触控目标的下限，不能再小。 */
+.dock__btn {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--text-2);
+  transition: transform var(--dur-fast) var(--ease-out-quart),
+              color var(--dur-fast) ease,
+              border-color var(--dur-fast) ease;
+}
+
+.dock__btn svg { display: block; }
+.dock__btn:active { transform: scale(0.92); }
+.dock__btn[aria-pressed="true"],
+.dock__btn[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+
+/* --------------------------------------------------------------------------
+   设置面板的内部件
+   面板本身复用 .drawer（底部滑出 + 遮罩，见 scenes.css），
+   这里只定义音乐开关、音量滑杆与配色选项。
+   -------------------------------------------------------------------------- */
+
+.set-group {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.set-group:first-of-type { border-top: 0; padding-top: 2px; }
+
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.set-row--stack { display: block; margin-top: 14px; }
+.set-row__head { display: flex; align-items: center; justify-content: space-between; }
+
+.set-row__label {
+  font-size: calc(13.5px * var(--fs));
+  color: var(--text-2);
+}
+
+.set-row__num {
+  font-size: calc(12.5px * var(--fs));
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 音乐关掉时把音量那行压灰：滑杆推了也没声音，得让她看得出原因 */
+.set-row.is-off .set-row__label,
+.set-row.is-off .set-row__num { opacity: 0.45; }
+
+/* --- 开关 --- */
+.switch {
+  position: relative;
+  width: 44px; height: 26px;
+  flex: none;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: background-color var(--dur-base) ease, border-color var(--dur-base) ease;
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: transform var(--dur-base) var(--ease-out-quart);
+}
+
+.switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.switch[aria-checked="true"]::after { transform: translateX(18px); }
+
+/* --- 音量滑杆 ---
+   轨道本身只有 4px，输入框给 22px 是触控热区。
+   已填充的一段用主色：-webkit-appearance:none 之后原生不会自己填色，
+   所以 JS 会把百分比写进 --fill（见 components/settings.js）。 */
+.range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  margin-top: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right,
+    var(--accent) var(--fill, 0%),
+    var(--line-strong) var(--fill, 0%));
+}
+
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  margin-top: -7px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+}
+
+.range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.range::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.range::-moz-range-thumb {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.range:disabled { cursor: default; }
+.range:disabled::-webkit-slider-thumb { opacity: 0.45; }
+.range:disabled::-moz-range-thumb { opacity: 0.45; }
+
+/* --- 配色选项 --- */
+.set-opts {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.set-opt {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: calc(13px * var(--fs));
+  cursor: pointer;
+  transition: border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+
+.set-opt[aria-pressed="true"] { border-color: var(--accent); color: var(--text); }
+.set-opt__name { white-space: nowrap; }
+
+.swatch {
+  width: 18px; height: 18px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+}
+
+.swatch--clay       { background: linear-gradient(135deg, #FAF9F5 45%, #CC785C 45%); }
+.swatch--clay-night { background: linear-gradient(135deg, #181715 45%, #E08D6B 45%); }
+
+/* 右侧那列进度点已按用户要求整体去掉（v1.2.9）。
+   initSceneTracker 仍会创建，但不再传 dotsContainer：
+   幕的 onEnter/onLeave 与视差都依赖它那个已节流的滚动回调。
+   对应的 .dots / .dots__i 样式一并删掉，别再有人照抄回来。 */
+
+/* --------------------------------------------------------------------------
+   ?still=1 调试模式：跳过过场，直接呈现最终状态
+   -------------------------------------------------------------------------- */
+
+.still .boot { display: none; }
+.still .reveal { opacity: 1 !important; transform: none !important; filter: none !important; }
+.still .scroll-hint { opacity: 1; }
+.still *,
+.still *::before,
+.still *::after {
+  animation-duration: 0.001ms !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* --------------------------------------------------------------------------
+   降低动效偏好
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  .reveal {
+    opacity: 1; transform: none; filter: none;
+    transition: opacity 120ms linear;
+  }
+
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;      /* 逐个错峰的延迟也要清掉，否则会一排排地卡出来 */
+    animation-iteration-count: 1 !important;
+    transition-duration: 120ms !important;
+    /* ⚠️ 这一条以前漏了：错峰入场用的是 transition-delay（不是 animation-delay），
+       不清掉的话开了「减少动效」的用户仍会看到元素排队依次卡出来，
+       正好违背了这个偏好的本意。 */
+    transition-delay: 0ms !important;
+  }
+}
+
+/* ==========================================================================
+   桌面端适配（v1.8.4）—— 与 scenes.css 末尾的桌面区块同一断点
+   ========================================================================== */
+@media (min-width: 1024px) {
+
+  /* 足迹幕（.scene--flow）是全站信息密度最高的一屏：
+     时间线 + 卡片 + 照片网格 + 地图，手机列宽（--col）在这里太挤。
+     放宽到 780px，地图 canvas 是 width:100% 自适应，跟着一起变大；
+     其余幕（解锁/刮卡/拼图/蛋糕/信）保持 --col 居中窄列 ——
+     叙事类内容拉满宽反而散，窄列的仪式感是刻意的。 */
+  .scene--flow .scene__inner { max-width: min(92%, 780px); }
+
+  /* 录入抽屉：底部全宽抽屉是移动端键盘弹出的配套形态，
+     桌面上改居中浮窗（从下滑入的动画照旧，视觉上是弹窗）。
+     抓手（::before）是给「往上滑关闭」的暗示，鼠标没有这个手势，藏掉。 */
+  .drawer { align-items: center; }
+  .drawer__panel {
+    width: min(100%, 560px);
+    max-height: 86vh;
+    border-radius: var(--r-xl);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 24px;
+  }
+  .drawer__panel::before { display: none; }
+}

@@ -1,0 +1,2697 @@
+﻿/* ==========================================================================
+   scenes.css · 各幕样式
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   通用：整屏画布
+   -------------------------------------------------------------------------- */
+
+.canvas-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.scene__inner { position: relative; z-index: 1; }
+
+.stack { display: flex; flex-direction: column; }
+.stack--center { align-items: center; text-align: center; }
+.stack--gap-8  { gap: 8px; }
+.stack--gap-16 { gap: 16px; }
+.stack--gap-24 { gap: 24px; }
+.stack--gap-32 { gap: 32px; }
+
+/* 向下滑的提示 */
+.scroll-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-3);
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity var(--dur-slow) ease;
+  z-index: 2;
+}
+.scroll-hint.is-in { opacity: 1; }
+.scroll-hint__arrow { animation: hint-bob 2.1s var(--ease-out-quart) infinite; }
+
+@keyframes hint-bob {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50%      { transform: translateY(5px); opacity: 1; }
+}
+
+/* --------------------------------------------------------------------------
+   幕 0 · 解锁门
+   -------------------------------------------------------------------------- */
+
+.unlock__q {
+  /* --fs 来自 base.css（ui.fontScale）。就地带上缩放，别再靠末尾整块覆盖 ——
+     那种双写会让人改原始值时毫无反应。 */
+  font-size: clamp(calc(19px * var(--fs)), calc(5.6vw * var(--fs)), calc(24px * var(--fs)));
+  color: var(--text);
+  margin: 0 0 22px;
+  letter-spacing: 0.04em;
+}
+
+/* 下划线式输入框。
+   胶囊形半透明输入框是移动端最通用的长相，放在"生日开门"这一幕没有仪式感。
+   改成下划线：聚焦时陶土红线亮起。
+   数字居中 —— 原来顶着左边，右边却是圆形按钮，整体失衡。 */
+.unlock__field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: transparent;
+  transition: border-color var(--dur-base) var(--ease-in-out-soft);
+}
+
+.unlock__field:focus-within { border-bottom-color: var(--accent); }
+
+.unlock__field.is-wrong { animation: shake 380ms var(--ease-out-quart); }
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  45% { transform: translateX(5px); }
+  70% { transform: translateX(-3px); }
+}
+
+.unlock__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 20px;
+  letter-spacing: 0.35em;
+  /* 末位字符后面还挂着 0.35em 的字距，居中时会偏左一点点，补回来 */
+  text-indent: 0.35em;
+  text-align: center;
+  padding: 10px 0;
+}
+
+.unlock__input::placeholder { color: var(--text-3); letter-spacing: 0.28em; }
+
+.unlock__go {
+  flex: 0 0 auto;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--accent-strong);
+  color: var(--on-accent);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out-quart);
+}
+.unlock__go:active { transform: scale(0.92); }
+
+.unlock__hint {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--text-3);
+  min-height: 1.4em;
+  transition: color var(--dur-base) ease;
+}
+.unlock__hint.is-wrong { color: var(--accent); }
+
+/* 按钮被接受的那一下：一圈光晕散开，先让她知道"对了"
+   ⚠️ 用伪元素的 transform+opacity 而不是直接动 box-shadow ——
+   box-shadow 的 spread 变化每帧都要重绘（按钮不大但一帧一次重绘
+   在低端机上是实打实的成本），而 transform/opacity 走合成器。
+   position:absolute + pointer-events:none 保证不影响按钮的点击区域。 */
+.unlock__go.is-ok {
+  animation: go-accept 520ms var(--ease-out-expo);
+}
+.unlock__go { position: relative; }
+.unlock__go.is-ok::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: go-halo 520ms var(--ease-out-expo) forwards;
+}
+@keyframes go-halo {
+  0%   { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+
+/* --------------------------------------------------------------------------
+   解锁通过 · 过场：像翻开一本书的封面
+   改之前是"两扇门从中间滑开"，还是像幕布；现在换成绕左侧书脊的 3D 翻页 ——
+   纸张类隐喻里最有分量的一个动作（Codrops 的 page transition、
+   Chrome 那篇 flippable book 都是这套：rotateY + 书脊原点 + 正反两面 + 投影）。
+   为什么必须是固定遮罩：解锁门是竖向流里独立的一屏，它背后没有"首页"，
+   只有这一屏自己的底色 —— 得先盖上封面、把页面跳到首页，再翻。
+   -------------------------------------------------------------------------- */
+
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 96;
+  display: none;
+  pointer-events: none;
+  overflow: hidden;
+  perspective: 1500px;
+  perspective-origin: 58% 46%;
+}
+
+.gate.is-on { display: block; }
+
+/* 封面抬起时投在新页面上的阴影：光从书脊那一侧进来 */
+.gate__cast {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--text) 20%, transparent), transparent 46%);
+  opacity: 0;
+}
+
+.gate.is-turning .gate__cast { animation: gate-cast 1400ms ease-out forwards; }
+
+@keyframes gate-cast {
+  0%   { opacity: 0; }
+  16%  { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+/* 封面本体：绕左边缘（书脊）翻出去 */
+.gate__page {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0% 50%;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.gate.is-turning .gate__page { animation: gate-turn 1400ms cubic-bezier(0.55, 0.02, 0.25, 1) forwards; }
+
+/* 末尾故意过一点再回弹：像纸页有自己的重量，而不是匀速转过去 */
+@keyframes gate-turn {
+  0%   { transform: rotateY(0deg); }
+  74%  { transform: rotateY(-176deg); }
+  88%  { transform: rotateY(-165deg); }
+  100% { transform: rotateY(-172deg); }
+}
+
+.gate__face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface-2) 20%, var(--bg)),
+    color-mix(in srgb, var(--surface-2) 56%, var(--bg)));
+}
+
+/* 封面的背面：纸的里侧，比正面深一点（翻过去以后看到的就是它） */
+.gate__face--back {
+  transform: rotateY(180deg);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface-2) 62%, var(--bg)),
+    color-mix(in srgb, var(--surface-2) 94%, var(--bg)));
+}
+
+/* 书脊那一侧的暖光：封面翻开的瞬间从这里透进来 */
+.gate__glow {
+  position: absolute;
+  left: 0; top: 50%;
+  width: 70vmax; height: 70vmax;
+  margin: -35vmax 0 0 -18vmax;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--accent) 40%, transparent) 0%, transparent 58%);
+  opacity: 0;
+}
+
+.gate.is-turning .gate__glow { animation: gate-glow 1400ms ease-out forwards; }
+
+@keyframes gate-glow {
+  0%   { opacity: 0; transform: scale(0.72); }
+  30%  { opacity: 0.8; }
+  100% { opacity: 0; transform: scale(1.18); }
+}
+
+/* 减少动效：不做翻页，JS 那边直接跳过去（这里再兜一道） */
+[data-effects="calm"] .gate__page,
+[data-effects="calm"] .gate__cast,
+[data-effects="calm"] .gate__glow { animation: none; }
+
+/* --------------------------------------------------------------------------
+   幕 1 · 生日快乐
+   -------------------------------------------------------------------------- */
+
+/* 首屏的日期锚点。
+   原来三行字孤零零悬在正中、上下各空 300px，整页没有落点；
+   现在顶部给一个带两侧细线的日期（与蛋糕幕的 eyebrow 同一套做法），
+   文字块整体略高于几何中心，下方留给滚动提示与设置入口。 */
+.hero__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 20px;
+  font-family: var(--serif);
+  font-size: calc(12.5px * var(--fs));
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;          /* 补掉末字之后的字距，两侧细线才对称 */
+  color: var(--text-3);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 900ms ease, transform 900ms var(--ease-out-quart);
+}
+
+.hero__eyebrow::before,
+.hero__eyebrow::after {
+  content: '';
+  height: 1px;
+  width: 34px;
+  background: var(--line-strong);
+}
+
+.hero__eyebrow.is-in { opacity: 1; transform: none; }
+
+#scene-hero .scene__inner { padding-bottom: 9vh; }
+
+.hero__name {
+  font-family: var(--serif);
+  font-size: clamp(calc(26px * var(--fs)), calc(8vw * var(--fs)), calc(38px * var(--fs)));
+  color: var(--accent);
+  margin: 16px 0 0;
+  letter-spacing: 0.14em;
+  text-indent: 0.14em;          /* 同上：字距补偿，名字才正中 */
+}
+
+.hero__sub {
+  margin: 34px 0 0;
+  font-size: calc(14px * var(--fs));
+  color: var(--text-3);
+  letter-spacing: 0.1em;
+  text-indent: 0.1em;
+  opacity: 0;
+  transition: opacity 1100ms ease;
+}
+
+.hero__sub.is-in { opacity: 1; }
+
+.hero__letter {
+  display: inline-block;
+  opacity: 0;
+  transform-origin: 50% 100%;
+  transform: rotateX(-32deg) translateY(0.14em) scale(0.96);
+  animation: letter-in 620ms var(--ease-out-expo) forwards;
+}
+
+/* 单字像卡片一样立起来。父级 .display--xl 上的 perspective 提供纵深。 */
+@keyframes letter-in {
+  to { opacity: 1; transform: none; }
+}
+
+/* --------------------------------------------------------------------------
+   幕 2 · 开场语
+   -------------------------------------------------------------------------- */
+
+.opening__line {
+  font-size: clamp(calc(17px * var(--fs)), calc(5vw * var(--fs)), calc(21px * var(--fs)));
+  line-height: 2;
+  color: var(--text);
+  margin: 0;
+  white-space: pre-line;
+}
+.opening__line + .opening__line { margin-top: 28px; color: var(--text-2); }
+
+/* --------------------------------------------------------------------------
+   幕 3 · 旅行足迹
+   -------------------------------------------------------------------------- */
+
+.fp__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.fp__title { font-size: calc(20px * var(--fs)); font-weight: 500; margin: 0; }
+
+.fp__stats {
+  font-size: calc(12.5px * var(--fs));
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  margin: 0 0 18px;
+}
+
+.fp__stats b { font-weight: 500; color: var(--text); }
+
+.fp__views {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  margin-bottom: 18px;
+  align-self: flex-start;
+}
+
+.fp__view {
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: calc(13px * var(--fs));
+  padding: 7px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-in-out-soft),
+              background-color var(--dur-fast) var(--ease-in-out-soft);
+}
+
+/* 选中态原来靠 --surface-2 与 --surface 的亮度差 —— 实测只差 2%，
+   在这个暖底上基本读不出来，切换后像是「没反应」。
+   改用 --accent-soft（陶土红的极浅版）加一圈淡描边，辨识度立刻不同。 */
+.fp__view.is-active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+@media (hover: hover) {
+  .fp__view:not(.is-active):hover { color: var(--text-2); }
+}
+.fp__view:active { transform: scale(0.97); }
+
+/* --- 时间线主干 --- */
+
+.tl {
+  position: relative;
+  padding-left: 27px;
+}
+
+.tl__rail {
+  position: absolute;
+  left: 7px;
+  top: 14px;
+  bottom: 20px;
+  width: 1px;
+  /* 老浏览器不支持 color-mix 时的兜底 */
+  background: var(--line-strong);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--accent) 85%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 30%, transparent) 55%,
+    color-mix(in srgb, var(--text-3) 18%, transparent) 100%
+  );
+}
+
+.tl__item { position: relative; margin-bottom: 18px; }
+.tl__item:last-child { margin-bottom: 0; }
+
+.tl__dot {
+  position: absolute;
+  left: -24px;
+  top: 20px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.tl__item[data-fade="1"] .tl__dot { opacity: 0.62; background: var(--text-2); box-shadow: none; }
+.tl__item[data-fade="2"] .tl__dot { opacity: 0.34; background: var(--text-3); box-shadow: none; }
+
+.tl__ripple {
+  position: absolute;
+  left: -30px;
+  top: 14px;
+  width: 21px; height: 21px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tl__item.is-new .tl__ripple { animation: ripple 1200ms var(--ease-out-expo) 3; }
+
+@keyframes ripple {
+  0%   { transform: scale(0.4); opacity: 0.8; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+/* --- 卡片 --- */
+
+.trip {
+  position: relative;   /* 右上角的迷你照片堆以卡片定位 */
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 14px;
+  cursor: pointer;
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  transition: transform var(--dur-base) var(--ease-out-quart),
+              border-color var(--dur-base) ease;
+}
+
+.trip:active { transform: scale(0.992); }
+.trip.is-open { border-color: var(--line-strong); }
+
+/* 整张卡现在可聚焦（tabindex=0 + role=button，见 timeline.js），
+   必须给它一条看得见的焦点反馈 —— 键盘用户展开行程靠的就是这个。 */
+.trip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--r-lg);
+}
+.trip:focus:not(:focus-visible) { outline: none; }
+
+/* 行程卡抬头：两行 —— 第一行地点（主），第二行时间（次）。
+   原来是一个 flex 行把日期和城市并排（`2026.09  武汉`），
+   数字和地名挤在一行，地点的识别度被压低。现在地点独占一行当标题，
+   时间退到下面做次级信息，层级清楚得多。 */
+.trip__top {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.trip__place {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.trip__when {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.trip__date {
+  font-family: var(--mono);
+  font-size: calc(12px * var(--fs));
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 备注里的日期区间（05-10 ~ 05-12）：跟在日期后面，同一套等宽排印 */
+.trip__range {
+  font-family: var(--mono);
+  font-size: calc(11.5px * var(--fs));
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  padding-left: 9px;
+  border-left: 1px solid var(--line-strong);
+}
+
+/* 地点升到 17px：它现在是这一行的主信息（时间退为次级），
+   比原来 16px 稍大一点以强化层级，但仍克制——行程卡里照片才是主角。 */
+.trip__city { font-size: calc(17px * var(--fs)); font-weight: 500; }
+.trip__country { font-size: calc(11.5px * var(--fs)); color: var(--text-3); }
+
+.trip__note {
+  margin: 5px 0 0;
+  font-size: calc(13px * var(--fs));
+  color: var(--text-2);
+  line-height: 1.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trip.is-open .trip__note { white-space: normal; }
+
+.trip__tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+
+.tag {
+  font-size: calc(11px * var(--fs));
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+/* --- 收起卡片右上角的迷你照片堆 --------------------------------------
+   像刚洗出来随手叠放的几张：顶张接近摆正，越往下越歪。
+   展开时整堆转正、淡出，把位置让给真正的照片网格。 */
+.trip__stack {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 56px;
+  height: 62px;
+  pointer-events: none;   /* 点击穿透到卡片本身（点卡片就是展开） */
+  transition: transform var(--dur-base) var(--ease-out-quart),
+              opacity var(--dur-base) ease;
+}
+
+.trip__stack img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 2px solid var(--surface);   /* 相纸白边 */
+  background: var(--surface-2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transform: rotate(var(--stack-tilt, 0deg));
+}
+
+/* 只有旋转的话角落探出得少，各垫一层小小的位移更像随手叠的 */
+.trip__stack img:nth-child(2) { transform: translate(2px, 2px) rotate(var(--stack-tilt, 0deg)); }
+.trip__stack img:nth-child(3) { transform: translate(-2px, 3px) rotate(var(--stack-tilt, 0deg)); }
+
+/* 顶张（封面）在最上面 */
+.trip__stack img:nth-child(1) { z-index: 3; }
+.trip__stack img:nth-child(2) { z-index: 2; }
+.trip__stack img:nth-child(3) { z-index: 1; }
+
+.trip.has-stack .trip__main { padding-right: 74px; }
+.trip.is-open .trip__main { padding-right: 0; }   /* 堆淡出后文字用回全宽 */
+
+.trip.is-open .trip__stack {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.9);
+}
+
+/* --- 展开瞬间：照片从歪斜的一小堆弹性转正、逐张落进网格 --------------
+   --tilt 每张不同（JS 里循环取），--d 是交错序号（封顶 9，约 0.4s 内出完）。
+   挂在 .is-open 上：收起即停，再开重播 —— 不用 JS 参与。 */
+@keyframes photo-fan {
+  from {
+    opacity: 0;
+    transform: rotate(var(--tilt, 0deg)) translateY(14px) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.trip.is-open .photo {
+  animation: photo-fan 0.55s var(--ease-spring) both;
+  animation-delay: calc(var(--d, 0) * 45ms);
+}
+/* 有堆叠的卡片走克隆飞行，is-landed 会按张抑制这条动画 —— 无需额外延迟 */
+
+/* --- 展开/收起的照片飞行克隆层 ----------------------------------------
+   克隆是 fixed 合成层，起止 rect 现量现用，落地即删。
+   两条航线的克隆各按「目的地」打扮：
+   撒进网格的（is-plane）是圆角裸照片，无影无过冲（扫过空格不拖影）；
+   飞回堆叠的（is-gather）全程白边相纸，多余的张落到堆上淡出被"收进"。 */
+.trip-clone {
+  position: fixed;
+  z-index: 80;
+  object-fit: cover;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.trip-clone.is-plane {
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.trip-clone.is-gather {
+  border-radius: 6px;
+  border: 2px solid var(--surface);
+  background: var(--surface-2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: transform 420ms cubic-bezier(0.5, 0, 0.35, 1), opacity 260ms ease;
+}
+
+/* 飞行中真身藏住；is-landed 长在真身上，防止 photo-fan 在落地时重播一遍。
+   写成 .trip .photo.is-* 是为了压过上面 .trip.is-open .photo 的 fan 动画 */
+.trip .photo.is-landing img { opacity: 0; }
+.trip .photo.is-landing,
+.trip .photo.is-landed { animation: none; }
+
+/* 收起时堆叠先藏着，等克隆落下来再现出 */
+.trip__stack.is-held { opacity: 0 !important; transition: none; }
+
+/* --- 展开后的景区列表 --- */
+
+/* 展开区高度用 grid-rows 0fr→1fr 过渡：以前展开是整条时间线销毁重建，
+   所有卡片的重叠入场动画重播一遍，观感是整屏闪；现在只翻被点卡片的类。 */
+.trip__more {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows var(--dur-slow) var(--ease-out-expo),
+              opacity var(--dur-base) ease;
+}
+
+.trip__more-inner { min-height: 0; overflow: hidden; }
+
+.trip.is-open .trip__more {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.spots { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+
+.spot { border-top: 1px solid var(--line); padding-top: 12px; }
+
+.spot__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.spot__name { font-size: calc(14px * var(--fs)); font-weight: 500; display: flex; align-items: center; gap: 7px; }
+
+.spot__pin {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: 0 0 6px;
+}
+
+.spot__meta { font-size: calc(11.5px * var(--fs)); color: var(--text-3); font-variant-numeric: tabular-nums; }
+
+.spot__note { font-size: calc(12.5px * var(--fs)); color: var(--text-2); margin: 6px 0 0; line-height: 1.6; }
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.photo {
+  aspect-ratio: 1 / 1;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.photo img { width: 100%; height: 100%; object-fit: cover; }
+
+.photo--placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  background: var(--surface-2);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--accent) 14%, var(--bg)) 0%,
+    color-mix(in srgb, var(--accent-2) 12%, var(--bg)) 100%);
+  font-size: 15px;
+  font-family: var(--serif);
+  cursor: default;
+}
+
+.trip__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.trip__action {
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  /* 原来只有 :hover，没有 :active —— 手机上按下去完全没有触觉反馈，
+     看起来就是一行灰字。补上按压与过渡。 */
+  transition: color var(--dur-fast) var(--ease-in-out-soft),
+              background-color var(--dur-fast) var(--ease-in-out-soft);
+}
+.trip__action:hover { background: var(--surface-2); color: var(--text); }
+.trip__action:active { transform: scale(0.96); }
+.trip__action--danger:hover { color: var(--error); }
+
+/* 时间线末尾的「补上一段」：居中、实心，比普通按钮更有邀请感 */
+.fp__add {
+  display: flex;
+  margin: 26px auto 0;
+}
+
+/* --- 空状态 --- */
+
+.fp__empty {
+  padding: 40px 20px;
+  text-align: center;
+  border-radius: var(--r-lg);
+  border: 1px dashed var(--line-strong);
+}
+
+.fp__empty p { margin: 0 0 16px; color: var(--text-2); font-size: 14px; }
+
+.fp__empty-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin: 0 auto 18px;
+  animation: boot-breathe 2.4s ease-in-out infinite;
+}
+
+/* --- 地图视图 --- */
+
+.mapwrap {
+  position: relative;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.mapwrap canvas { display: block; width: 100%; }
+
+/* 放大后光标提示可以拖拽 */
+.mapwrap.is-zoomed { cursor: grab; }
+.mapwrap.is-zoomed:active { cursor: grabbing; }
+
+/* --- 缩放控件（左上，避开右上的提示徽标） --- */
+
+.map__zoom {
+  position: absolute;
+  left: 10px; top: 10px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.map__zb {
+  width: 32px; height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  /* 下面 ::after 用绝对定位撑 44px 触控热区，锚点必须是这个按钮自己 */
+  position: relative;
+  /* 与右下角 .dock__btn 同一套：不透明表面 + --text-2，对比度 10.3:1。
+     不要改用 --scrim —— 半透明深色压在地图上只有约 3:1，加号会糊。 */
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-2);
+  font-size: 17px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out-quart), opacity var(--dur-fast) ease;
+}
+
+.map__zb--reset { font-size: 11px; letter-spacing: 0.02em; }
+.map__zb:active { transform: scale(0.92); }
+.map__zb:disabled { opacity: 0.32; }
+.map__zb[hidden] { display: none; }
+
+/* 32px 在手机上是最难点中的控件。用伪元素把「可点区域」撑到 44px
+   （iOS 建议的最小触控目标），视觉尺寸保持 32px 不变——
+   地图上的按钮变大 会挡住内容。 */
+.map__zb::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 44px; height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+/* 附图出现时给底部提示条让位，否则会把附图盖住 */
+.mapwrap.has-inset .map__tip { right: 96px; }
+
+.map__tip {
+  position: absolute;
+  left: 10px; right: 10px; bottom: 10px;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  /* ⚠️ 与 .map__hint 同理：这是浮在地图上的**浅色**控件，
+     不能用 --scrim-solid（深色）—— 那会在浅色地图上变成一块黑饼。
+     与 .map__zb / .dock__btn 保持同一套语言：不透明表面 + 投影浮起。
+     原来的问题是底色半透明 + --text-2 只有约 3.4:1（12.5px 需 4.5:1），
+     改用 --text 后不透明浅底上是 13+:1。 */
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--text);
+  text-shadow: var(--text-halo);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity var(--dur-base) ease, transform var(--dur-base) ease;
+  pointer-events: none;
+}
+
+.map__tip.is-on { opacity: 1; transform: none; }
+
+/* 地图操作提示（"拖拽平移 · 双击复位"）。
+   ⚠️ 底色**不能**用 --scrim-solid（v1.7.5 踩过）：那个值是深色的
+   （rgba(24,23,21,.90)），浅色地图上就是一块黑饼 —— 而这条提示
+   与 .map__zb 用的是同一套「浮在图上的小控件」语言。
+   正确做法与 .map__zb 同款：--surface 不透明底 + --text-2
+   （对比度 10.3:1），靠 box-shadow 浮起。
+   原来这里写 --text-3（对比度偏紧）才是要改的那一半。 */
+.map__hint {
+  position: absolute;
+  right: 10px; top: 10px;
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  text-shadow: var(--text-halo);
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+/* --------------------------------------------------------------------------
+   幕 4 · 刮刮卡
+   -------------------------------------------------------------------------- */
+
+.scratch {
+  position: relative;
+  width: min(100%, 380px);
+  aspect-ratio: 1.62 / 1;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  background: linear-gradient(145deg,
+    color-mix(in srgb, var(--accent) 22%, var(--bg)) 0%,
+    color-mix(in srgb, var(--accent-2) 20%, var(--bg)) 100%);
+  touch-action: none;
+}
+
+/* 券面：一开始就"印"在纸上，被涂层盖住 —— 刮开哪里露哪里。
+   米纸底 + 极淡的格纹 + 虚线内框 + 印章，刮任何一角都看得出下面是张印好的卡。 */
+.scratch__prize {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 30px 26px;
+  text-align: center;
+  background:
+    repeating-linear-gradient(0deg,
+      transparent 0 9px,
+      color-mix(in srgb, var(--text) 3%, transparent) 9px 10px),
+    repeating-linear-gradient(90deg,
+      transparent 0 9px,
+      color-mix(in srgb, var(--text) 3%, transparent) 9px 10px),
+    linear-gradient(150deg,
+      color-mix(in srgb, var(--surface) 82%, var(--accent) 18%) 0%,
+      color-mix(in srgb, var(--surface-2) 70%, var(--accent) 12%) 58%,
+      color-mix(in srgb, var(--surface-2) 55%, var(--accent) 20%) 100%);
+}
+
+/* 虚线内框：兑换券的裁切线 */
+.scratch__prize::before {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border: 1.5px dashed color-mix(in srgb, var(--text) 26%, transparent);
+  border-radius: calc(var(--r-xl) - 9px);
+  pointer-events: none;
+}
+
+.scratch__label {
+  margin: 0;
+  font-size: 10.5px;
+  letter-spacing: 2px;
+  color: color-mix(in srgb, var(--text) 52%, transparent);
+}
+
+/* 右下角的红印章：旋转一点才有真印章的随意 */
+.scratch__seal {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border: 2px solid color-mix(in srgb, #C64F3F 72%, var(--accent));
+  border-radius: 50%;
+  color: color-mix(in srgb, #C64F3F 72%, var(--accent));
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+  transform: rotate(-12deg);
+  opacity: 0.8;
+}
+
+.scratch__seal::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.55;
+}
+
+.scratch__text {
+  font-family: var(--serif);
+  font-size: clamp(calc(19px * var(--fs)), calc(5.4vw * var(--fs)), calc(24px * var(--fs)));
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0;
+}
+
+.scratch__foot {
+  font-size: calc(12px * var(--fs));
+  color: var(--text-3);
+  margin: 0;
+}
+
+/* 全揭开时文字轻轻落定一下，不再靠透明度藏内容（藏了就刮不出来） */
+.scratch.is-revealed .scratch__text {
+  animation: prize-pop 0.6s var(--ease-spring) 0.12s both;
+}
+
+@keyframes prize-pop {
+  from { transform: scale(0.94); }
+  to { transform: scale(1); }
+}
+
+.scratch__canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; }
+.scratch__canvas:active { cursor: grabbing; }
+
+/* --------------------------------------------------------------------------
+   幕 5 · 拼图
+   -------------------------------------------------------------------------- */
+
+/* 交互是点击交换，这里刻意不设 touch-action: none ——
+   手机上手指从格子上起手要能正常滚动页面（真要做拖拽再加回）。 */
+.puzzle {
+  position: relative;
+  width: min(100%, 340px);
+  aspect-ratio: 1 / 1;
+  display: grid;
+  gap: 2px;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.puzzle__tile {
+  position: relative;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background-repeat: no-repeat;
+  transition: transform var(--dur-base) var(--ease-out-quart),
+              box-shadow 260ms ease,
+              opacity 260ms ease;
+}
+
+.puzzle__tile.is-picked {
+  transform: scale(0.9);
+  box-shadow: 0 0 0 2px var(--accent);
+  z-index: 2;
+}
+
+.puzzle__tile.is-hint { animation: tile-hint 700ms var(--ease-out-quart); }
+
+@keyframes tile-hint {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* 拼好：照片留下，轻轻落定并散出一圈暖光（奖品的"落槌感"） */
+/* 光晕走伪元素的 transform/opacity（不重绘），拼图本体的动效只留 transform */
+.puzzle.is-solved { animation: puzzle-settle 1000ms var(--ease-out-expo); position: relative; }
+.puzzle.is-solved::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 46%, transparent);
+  animation: puzzle-halo 1000ms var(--ease-out-expo) forwards;
+}
+
+@keyframes puzzle-settle {
+  0%   { transform: scale(1.035); }
+  38%  { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+@keyframes puzzle-halo {
+  0%   { opacity: 1; transform: scale(1); }
+  38%  { opacity: 0.4; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(1.16); }
+}
+
+/* 玩法提示：拼好/跳过后淡出并收起高度，位置让给收尾文字 */
+.puzzle__guide {
+  /* 用 grid-template-rows:0fr→1fr 而不是 max-height（与 .trip__more 一致）：
+     max-height 是布局属性，过渡期间逐帧 layout；0fr→1fr 由内容撑开，
+     只动合成属性。 */
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: opacity 320ms ease, grid-template-rows 460ms var(--ease-out-quart);
+}
+.puzzle__guide > * { min-height: 0; }   /* grid 子项默认 min-height:auto 会撑破 0fr */
+.puzzle__guide.is-gone {
+  opacity: 0;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+}
+
+/* 收尾文字从下方升起 */
+.puzzle__done {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 700ms ease, transform 700ms var(--ease-out-quart);
+}
+.puzzle__done.is-in { opacity: 1; transform: none; }
+
+[data-effects="calm"] .puzzle.is-solved { animation: none; }
+
+/* --------------------------------------------------------------------------
+   幕 6 · 蛋糕
+   -------------------------------------------------------------------------- */
+
+.cake-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+}
+
+.cake { position: relative; width: min(78vw, 250px); }
+
+/* --- 3D 蛋糕（js/lib/cake3d.js 在跑时才显示） ---
+   平面版 .cake 不删：它是 WebGL2 不可用 / 上下文丢失 / 减少动效时的降级。
+   两者互斥显示，由 .cake-stage.has-3d 切换。 */
+.cake3d {
+  display: none;
+  width: 100%;
+  /* 画布要接近方形：蛋糕是竖向物体，画布一宽，取景就被水平方向卡住
+     （复算：640×460 时竖直只能占 39.6%，460×520 时能占 56%）。
+     限宽 + 拉高，蛋糕才真的变大。吹灭后由 .is-done 收矮让位给文字。 */
+  max-width: min(100%, 560px);
+  margin-inline: auto;
+  height: min(86vw, 580px);
+  transition: height 0.7s var(--ease-out-expo);
+  /* 横向拖动转蛋糕，纵向留给页面滚动 —— 和地图那边同一个取舍 */
+  touch-action: pan-y;
+  cursor: grab;
+}
+
+.cake3d:active { cursor: grabbing; }
+
+.cake-stage.has-3d .cake3d { display: block; }
+.cake-stage.has-3d .cake { display: none; }
+
+/* --- 幕首小标题：细字距 + 两侧细线，给这一幕一个安静的仪式感 --- */
+.cake-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: calc(12px * var(--fs, 1));
+  letter-spacing: 0.32em;
+  color: var(--text-3);
+}
+.cake-eyebrow::before,
+.cake-eyebrow::after {
+  content: '';
+  height: 1px;
+  width: 30px;
+  background: var(--line);
+}
+
+/* --- 吹灭之后 --------------------------------------------
+   不撒彩带：画布收矮让出文字位，蛋糕身后亮起一圈烛光余晕，
+   结尾文字从下方升起。庆祝感来自光与留白，不是飞出来的纸片。 */
+.cake-stage.has-3d.is-done .cake3d { max-width: min(100%, 560px); height: min(60vw, 320px); }
+
+.cake-stage::before {
+  content: '';
+  position: absolute;
+  inset: -6% -10%;
+  /* 第一行是旧内核（微信 XWeb 不认 color-mix）的降级：固定陶土红；
+     认 color-mix 的浏览器用第二行，跟着主题变色 */
+  background: radial-gradient(ellipse 52% 44% at 50% 48%, rgba(204, 120, 92, 0.15), transparent 72%);
+  background: radial-gradient(ellipse 52% 44% at 50% 48%,
+    color-mix(in srgb, var(--accent) 15%, transparent), transparent 72%);
+  opacity: 0;
+  transition: opacity 1.4s ease;
+  pointer-events: none;
+}
+.cake-stage.is-done::before { opacity: 1; }
+
+.cake-stage.is-done .lead,
+.cake-stage.is-done .mic-bar,
+.cake-stage.is-done .btn {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+
+.cake-done { animation: cake-rise 0.9s var(--ease-out-expo) both; }
+@keyframes cake-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.candle {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 100%;
+  width: 5px;
+  height: 34px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--accent-2) 0 6px,
+    color-mix(in srgb, var(--text) 70%, transparent) 6px 12px
+  );
+}
+
+.flame {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 34px);
+  transform: translateX(-50%);
+  width: 11px; height: 19px;
+  border-radius: 50% 50% 46% 46%;
+  background: radial-gradient(circle at 50% 68%, #FFE9A8 0%, var(--accent) 48%, #E07B39 100%);
+  transform-origin: 50% 100%;
+  animation: flame-dance 380ms ease-in-out infinite alternate;
+  transition: opacity 420ms ease, transform 420ms ease;
+}
+
+@keyframes flame-dance {
+  from { transform: translateX(-50%) scale(0.94) rotate(-2deg); }
+  to   { transform: translateX(-50%) scale(1.06) rotate(2deg); }
+}
+
+.flame.is-out { opacity: 0; transform: translateX(-50%) scale(0.3); animation: none; }
+
+.cake__body {
+  border-radius: var(--r-md) var(--r-md) 10px 10px;
+  background: var(--surface-2);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent-2) 62%, var(--bg)) 0%,
+    color-mix(in srgb, var(--accent-2) 34%, var(--bg)) 100%);
+  border: 1px solid var(--line);
+  height: 96px;
+  position: relative;
+  overflow: hidden;
+}
+
+.cake__body::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 14px;
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+}
+
+.cake__plate {
+  height: 9px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  margin-top: 6px;
+}
+
+.mic-bar {
+  width: min(70%, 220px);
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.mic-bar__fill {
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  /* ⚠️ 不要动width。原来是 `transition: width 90ms linear` + JS 每 90ms
+     写一次 width —— width 是布局属性，每帧触发布局/重排，而 .mic-bar 有
+     overflow:hidden，开麦校准期间（连续读 RMS）会持续带动周围重排。
+     改用 transform:scaleX：走合成器、不触发布局。JS 写 --level（0..1）。 */
+  transform: scaleX(var(--level, 0));
+  transform-origin: left center;
+  transition: transform 90ms linear;
+}
+
+/* --------------------------------------------------------------------------
+   幕 7 · 情书
+   -------------------------------------------------------------------------- */
+
+/* --- 信封 ---
+   层次就是 DOM 顺序（见 letter.js）：
+     信封底(1) → 收信人(1) → 信纸(2) → 正面·口袋与封盖(3) → 点击层(5)
+   口袋压在信纸下半截上 —— 信纸从信封里长出来时，留在信封里的那截自然被挡住，
+   真实信件就是这么出来的，不需要任何裁剪。 */
+
+.letter-env {
+  position: relative;
+  width: min(100%, 460px);
+  /* 信纸下方留出信封的位置：信封高 = 宽 × 5/8，露在封口以下约 38%
+     → 0.38 × 62.5% ≈ 23.75%。百分比内外边距按宽度算，正好对上。
+     拆信后这份空间要收回（见下方 .is-open），否则卡片悬浮在偏上位置、
+     下面一大片死区 —— v1.7.5 及之前一直如此。 */
+  padding-bottom: 23.75%;
+
+  /* 封盖的 rotateX 需要**父级透视**才有纵深（v1.7.6）。
+     之前整个 .letter-env 上没有 perspective，翻盖退化成「垂直压扁」，
+     连续帧里封盖像一块被拍扁的平板，完全不像翻盖。
+     1500px 与 .display--xl 同值；原点放在信封上部（封盖转轴在那）。 */
+  perspective: 1500px;
+  perspective-origin: 50% 30%;
+
+  /* 拆信前的极轻浮动：信封是这一幕唯一的主体，完全静止的话像一张图片。
+     7s 一周、±4px，纯 transform 只在合成器上跑，不触发重排。
+     .is-open 时摘掉 —— 拆信是干脆的动作，不该继续晃。 */
+  animation: env-float 7s ease-in-out infinite;
+
+  /* ---- 纸的材质 token ----
+     原来整封信是几个纯色块，视觉上就是「色块拼的盒子」。真纸的样子靠四样东西：
+       ① 纸面不是平的：中心亮、四边略暗（径向渐变）
+       ② 纸有纤维：双向极细条纹，低透明度（两个 repeating-linear-gradient）
+       ③ 折痕是一亮一暗成对的：受光面提亮、背光面压暗（对角渐变）
+       ④ 边缘有厚度：上沿一道高光、下沿一道内阴影（inset box-shadow 双层）
+     这四样叠起来才有「拿在手里」的感觉，缺一样都还是纸片。
+
+     其中 ② 纤维 与 ④ 边缘厚度 已经上提到 themes.css 的 :root 供全站复用
+     （值与这里原本写的完全相同，所以删掉本地定义后视觉零变化）；
+     ① 纸面明暗 与 ③ 折痕 只服务这一封信，留在本地。 */
+  --paper-face:
+    /* ① 纸面明暗：中心最亮，斜向外围渐暗。
+         v1.7.6 把外围两档加深（92→90 / 84→78）：日间 --surface 是 #FFFCF7，
+         只比页面底色 #FAF9F5 亮一丁点，整封信贴在近白背景上「发飘」，
+         V 形封盖几乎看不见。这个 token 只定义在 .letter-env 上
+         （信封与信纸共用），不影响全站纸材质。 */
+    radial-gradient(ellipse 120% 100% at 50% 42%,
+      color-mix(in srgb, var(--surface) 100%, transparent) 0%,
+      color-mix(in srgb, var(--surface) 90%, var(--text-3)) 62%,
+      color-mix(in srgb, var(--surface) 78%, var(--text-3)) 100%);
+  --paper-crease:
+    /* ③ 折痕：亮暗成对。单独一条暗线看着像脏印子，
+          必须紧挨一条亮线才读成「折过去了」。 */
+    linear-gradient(163deg,
+      transparent 0 47.4%,
+      color-mix(in srgb, var(--text) 6%, transparent) 48.2%,
+      color-mix(in srgb, var(--paper-hi) 26%, transparent) 49%,
+      transparent 50%),
+    linear-gradient(17deg,
+      transparent 0 47.4%,
+      color-mix(in srgb, var(--text) 5%, transparent) 48.2%,
+      color-mix(in srgb, var(--paper-hi) 22%, transparent) 49%,
+      transparent 50%);
+}
+
+@keyframes env-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+/* 信封底：纸面 + 纤维 + 边缘厚度。
+   投影分三层：贴地的接触影（短、深）+ 主体影（中）+ 远端散影（长、淡），
+   单层 box-shadow 看着像浮在页面上，三层才有「压在纸上」的重量。 */
+.env__back {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  aspect-ratio: 8 / 5;
+  z-index: 1;
+  border-radius: 4px 4px 7px 7px;   /* 底边比上边圆：信封是软纸袋，底角更圆 */
+  background-image: var(--paper-fibre), var(--paper-face);
+  box-shadow: var(--paper-edge),
+    0 2px 3px -1px color-mix(in srgb, var(--scrim) 26%, transparent),
+    0 12px 20px -14px color-mix(in srgb, var(--scrim) 42%, transparent),
+    0 30px 52px -34px color-mix(in srgb, var(--scrim) 60%, transparent);
+}
+
+/* 收信人：写在正面口袋上（从信封底往上约 28% 的位置）。
+   z-index 要比口袋(3)高，否则被口袋压住看不见。
+   墨字不是纯色 —— 压一道极淡的下沉影，读作「墨渗进纸里」而不是「浮在纸上」。 */
+.env__to {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  margin-bottom: 17.5%;
+  z-index: 4;
+  text-align: center;
+  /* 信封上的收信人是"手写上去"的（v1.7.9）：
+     这是整站最像"一封印真寄过来的信"的细节。
+     字距从 0.16em 收到 0.07em —— 原来那套宽字距是印刷品的排法，
+     手写不会把每个字掐开这么远。 */
+  font-family: var(--hand);
+  font-size: calc(18px * var(--fs));
+  letter-spacing: 0.07em;
+  text-indent: 0.07em;
+  color: color-mix(in srgb, var(--text-2) 88%, var(--text-3));
+  text-shadow: 0 0.5px 0 color-mix(in srgb, var(--paper-hi) 40%, transparent);
+  pointer-events: none;
+}
+
+/* 正面：口袋 + 封盖。
+   ⚠️ 这一层**不能有 z-index** —— 有的话它就自成层叠上下文，
+   里面的封盖再怎么改 z-index 也翻不到信纸后面去。 */
+.env__front {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  aspect-ratio: 8 / 5;
+  pointer-events: none;
+}
+
+/* V 形口袋：压住信纸下半截（z 3 > 信纸 2）
+   ⚠️ 顶点必须落在信封的 50% 处，与封盖的尖**重合成同一点**：
+   封盖三角的两条边在信封坐标里是 x=y，口袋若把顶点放低（比如 62%），
+   它的边就只有 x=0.806y —— 口袋的边始终在封盖边的左边，
+   两者之间会留出一条楔形缝，信纸的稿纸线就从缝里透出来。
+
+   折痕怎么画才准：**不要用 linear-gradient 去凑角度**（凑出来的是一条
+   只在中间露一截的短线，看着像画了个三角形框）。正确做法是
+   再叠一层与口袋同形状的 clip-path 元素，用**极窄的斜条**做折痕 ——
+   斜条的两条边与 clip-path 的两条斜边**完全平行**，宽度和位置由
+   calc() 按信封宽度算出来，任何画布尺寸下都严丝合缝。 */
+.env__pocket {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: 4px 4px 7px 7px;
+  clip-path: polygon(0 0, 0 100%, 100% 100%, 100% 0, 50% 50%);
+  background-image:
+    var(--paper-fibre),
+    /* 口袋是叠在信封底上的一层，受光更多 → 比底略亮 */
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 100%, transparent) 0%,
+      color-mix(in srgb, var(--surface) 90%, var(--text-3)) 100%);
+  box-shadow: var(--paper-edge);
+}
+
+/* 口袋下半部的边缘：真信封的口袋是一张纸的下半，
+   它的左右两侧会被上下的纸盖压住，中间那段应该有一条**横向的内阴影**
+   （上面那层的边压下来的影）。没有它，下半部就是一块平的白板。 */
+.env__pocket::after {
+  content: '';
+  position: absolute;
+  inset: 50% 0 0 0;
+  clip-path: polygon(0 0, 50% 0, 0 100%);
+  background: linear-gradient(to bottom right,
+    transparent calc(100% - 2.6%),
+    color-mix(in srgb, var(--text) 8%, transparent) 100%);
+  pointer-events: none;
+}
+
+/* 折痕层：形状与口袋完全一致（同一个 clip-path），
+   只是把纸面挖掉两条极窄的斜带，剩下的就是折痕。
+   两条斜带用 to bottom right / to bottom left —— 方向相反，
+   各自从信封的左右上角斜下到中点，正好对上 clip-path 的两条斜边。
+   宽度用 % 是**按元素尺寸**算的（元素是 8:5 的信封），任何画布尺寸都严丝合缝。 */
+.env__pocket::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  display: block;
+  /* 只保留**上半部**的折痕。斜带在 8:5 的信封上会一路延到底边，
+     可真信封的折痕只在封盖那半边 —— 下面那半是空白的口袋面。
+     所以在 50% 处切掉：这就是封盖尖的高度（与 clip-path 的顶点同点）。 */
+  clip-path: polygon(0 0, 0 50%, 50% 50%, 100% 50%, 100% 0);
+  background:
+    /* 右斜边：从右上角斜到中点。亮带在折线左上（受光），暗带紧贴右下 */
+    linear-gradient(to bottom left,
+      transparent calc(50% - 2.4%),
+      color-mix(in srgb, var(--paper-hi) 30%, transparent) calc(50% - 0.9%),
+      color-mix(in srgb, var(--text) 10%, transparent) 50%,
+      transparent calc(50% + 1.2%)),
+    /* 左斜边：从左上角斜到中点。镜像 */
+    linear-gradient(to bottom right,
+      transparent calc(50% - 2.4%),
+      color-mix(in srgb, var(--paper-hi) 30%, transparent) calc(50% - 0.9%),
+      color-mix(in srgb, var(--text) 10%, transparent) 50%,
+      transparent calc(50% + 1.2%));
+  pointer-events: none;
+}
+
+/* 封盖：上半那个三角，绕上边向后折。
+   合着时它在信纸前面（z 6），折过去之后要落到信纸后面（z 1）——
+   折回去的封盖是贴在信封背面的，信纸从里面出来时当然在它前面。
+   换层由 JS 在转到侧面时加 .is-flap-back（那时它几乎是一条线，看不出换层）。
+   ⚠️ transition 里**不要**再写 opacity（v1.7.6）：原来 1150ms 就把封盖
+   淡出，等于翻到一半人就没了，剩下的像信封「自己解体」。现在它翻到底、
+   停留可见，最后搭信封退场的车一起淡掉（见下方 .is-open .env__flap）。 */
+.env__flap {
+  position: absolute;
+  inset: 0 0 50% 0;
+  z-index: 6;
+  transform-origin: 50% 0;
+  transform-style: preserve-3d;
+  transition: transform 900ms var(--ease-out-expo) 180ms;
+}
+
+.letter-env.is-flap-back .env__flap { z-index: 1; }
+
+.env__flap-face {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* 封盖正面：合着时盖在口袋上面。它比口袋更亮（最外层，直接对着光），
+   底边那道弧形高光读作「封盖的边压住了口袋」—— 这是信封最关键的一处立体感。
+   ⚠️ 投影要**跟着封盖的斜边走**（`inset` + 负偏移），不能用一个普通的外阴影：
+   外阴影是矩形模糊，会在封盖的斜边之外留下一圈灰，斜边就不像是「压在纸上」的了。 */
+.env__flap-face--front {
+  background-image:
+    linear-gradient(178deg,
+      color-mix(in srgb, var(--paper-hi) 22%, transparent) 0 6%,
+      transparent 24%),
+    var(--paper-fibre),
+    linear-gradient(184deg,
+      color-mix(in srgb, var(--surface) 100%, transparent) 0%,
+      color-mix(in srgb, var(--surface) 93%, var(--text-3)) 100%);
+  box-shadow:
+    /* 沿两条斜边的内阴影：封盖压住口袋，影落在它自己的内侧 */
+    inset 0 6px 10px -8px color-mix(in srgb, var(--scrim) 46%, transparent),
+    inset 0 -3px 6px -5px color-mix(in srgb, var(--paper-hi) 26%, transparent);
+}
+
+/* 纸的里侧：转过 90° 之后看到的就是这一层。
+   真纸的背面比正面暗（没晒到光），纤维方向也不同。 */
+.env__flap-face--back {
+  transform: rotateX(180deg);
+  background-image:
+    var(--paper-fibre),
+    linear-gradient(6deg,
+      color-mix(in srgb, var(--surface) 82%, var(--text-3)) 0%,
+      color-mix(in srgb, var(--surface) 72%, var(--text-3)) 100%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--paper-hi) 18%, transparent);
+}
+
+/* 火漆印（v1.7.6 重构，从封盖正面挪到信封正面）：
+   - 原来它挂在封盖正面上，封盖一转开就跟着转走、过了 90° 连印带心
+     一起消失（backface-visibility），做不了「裂开掉落」；且真火漆是
+     焊在信封正面、横跨封盖尖与口袋的，拆信时裂开留在原处。
+   - 两半各自是完整火漆印的拷贝，clip-path 取走一半 —— 裂痕从桃心
+     正中穿过，比「整体缩放消失」真得多。
+   - 容器只定位（自身不再有动画），裂开与掉落全在两半上。
+   ⚠️ 定位的百分比是相对**.env__front**（= 信封盒子，bottom:0 +
+      aspect-ratio 8/5）算的，不是 .letter-env。v1.7.6 第一版直接挂在
+      包裹层上，bottom:calc(50% - 21px) 按包裹层高（信纸+预留占位）
+      算，火漆印中心偏到信封顶边下方 16px、而 V 顶点在 107px ——
+      偏 91px，快贴到顶边（用户截图指出「位置不对」）。
+      换父元素时**先确认盒子的高度是什么**。 */
+.env__seal {
+  position: absolute;
+  left: 50%;
+  /* 桃心正中落在信封中线上（= 封盖尖 / V 顶点）：
+     42px 高 → bottom = 50% - 21px。 */
+  bottom: calc(50% - 21px);
+  width: 42px; height: 42px;
+  margin-left: -21px;
+  z-index: 7;                 /* 高于封盖(6)：蜡是压在封盖尖上面的 */
+  transform: rotate(-7deg);
+}
+
+.env__seal-half {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  /* 不规则八点形：蜡滴凝固的边，不是正圆 */
+  border-radius: 48% 52% 45% 55% / 52% 46% 54% 48%;
+  color: color-mix(in srgb, var(--paper-hi) 82%, var(--accent));
+  background:
+    /* 中心凸起的高光 */
+    radial-gradient(circle at 34% 26%,
+      color-mix(in srgb, var(--accent) 82%, var(--paper-hi)) 0%,
+      var(--accent) 38%,
+      var(--accent-strong) 78%,
+      color-mix(in srgb, var(--accent-strong) 82%, #000) 100%);
+  /* 三层阴影做出「凸起的蜡」：上缘受光、下缘落影、外扩接触影 */
+  box-shadow:
+    inset 0 1.5px 2px color-mix(in srgb, var(--paper-hi) 40%, transparent),
+    inset 0 -2px 3px color-mix(in srgb, #000 22%, transparent),
+    0 2px 3px -1px color-mix(in srgb, var(--scrim) 40%, transparent),
+    0 5px 9px -4px color-mix(in srgb, var(--scrim) 46%, transparent);
+  /* 掉落走重力感的曲线：先被崩出去（快），再打着旋落下 */
+  transition: transform 560ms cubic-bezier(0.32, 0.72, 0.36, 1),
+              opacity 480ms ease 60ms;
+}
+.env__seal-half--l { clip-path: inset(0 50% 0 0); }
+.env__seal-half--r { clip-path: inset(0 0 0 50%); }
+.env__seal-half svg { width: 17px; height: 17px; display: block; }
+
+/* 裂开：两半各自向外 + 向下翻落，旋转方向相反 */
+.letter-env.is-cracking .env__seal-half--l {
+  transform: translate(-9px, 14px) rotate(-28deg);
+  opacity: 0;
+}
+.letter-env.is-cracking .env__seal-half--r {
+  transform: translate(9px, 14px) rotate(28deg);
+  opacity: 0;
+}
+
+/* 点击层：盖住整封信；「点一下，拆开这封信」这句提示也放在里面 */
+.env__hit {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.env__hint {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  transform: translateY(100%);
+  padding-top: 16px;
+  text-align: center;
+  font-size: calc(13px * var(--fs));
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+  transition: opacity 460ms ease;
+}
+
+.env__hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 10px; }
+
+/* --- 信纸 --- */
+
+.letter {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  padding: 30px 26px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line-strong);
+  /* 纸张必须比页面底色明显一档：
+     日间 页面 #FAF9F5 → 纸 #EFE9DE；夜间 页面 #181715 → 纸 #2E2B27。
+     原来用的 --surface 比页面还浅（#FFFCF7），所以整张卡片像没画出来。 */
+  /* 与信封同一套纸材质：纤维 + 纸面明暗 + 边缘厚度。
+     信纸和信封是同一叠纸 撕下来的，只给信封做质感、留信纸一块白板，
+     一眼就看出是两样东西。 */
+  background-image: var(--paper-fibre), var(--paper-face);
+  box-shadow: var(--paper-edge),
+    0 2px 4px -2px color-mix(in srgb, var(--scrim) 22%, transparent),
+    0 30px 54px -38px color-mix(in srgb, var(--scrim) 62%, transparent);
+  /* 底线略微探进信封口里一点，看起来是"插在信封里"的 */
+  margin-bottom: -4%;
+  /* 开信前藏在信封里：往下挪多远、下边裁掉多少，都由 JS 量出来
+     （--rise-from / --clip-from）。裁这一刀是必须的 ——
+     信纸比信封高，只靠口袋挡不住露在信封底边之外的那截。 */
+  transform: translateY(var(--rise-from, 0px));
+  clip-path: inset(0 0 var(--clip-from, 0px) 0);
+}
+
+/* --- 拆信（v1.7.6 重排） ---
+   完整时间轴：
+     0ms    火漆印裂成两半飞落（.env__seal-half，560ms）
+     180ms  封盖 3D 翻开（900ms，父级 perspective 提供纵深）
+     480ms  信纸升起（1300ms，0.985→1 微缩放）
+     1250ms 信封整体向下漂 20px + 淡出（620/720ms）
+             + 收回预留给信封的 23.75% 占位（700ms）
+     1960ms 开始逐字打字（JS 控制） */
+
+/* 封盖向后折：-168°（翻过头顶一点，倚在信封背后）。
+   转过 90° 之后显示背面那一层（纸的里侧，更暗）。 */
+.letter-env.is-open .env__flap { transform: rotateX(-168deg); }
+
+/* 信纸升出来：位移与裁边用**同一个** keyframes，才不会错位。
+   终点写 inset(-80px) 而不是 inset(0) —— 后者会把卡片自己的投影也裁掉。
+   缓动不能用 expo-out：那个开头就冲完了，看起来像"啪"地弹出来，
+   而不是"被慢慢抽出来"。这里用起步慢、收尾稳的曲线。
+   scale 0.985 → 1：极轻微的「由远及近」，没有它升起来像平移一块板。 */
+.letter-env.is-open .letter {
+  animation: letter-rise 1300ms cubic-bezier(0.36, 0.01, 0.2, 1) 480ms both;
+}
+
+@keyframes letter-rise {
+  from {
+    transform: translateY(var(--rise-from, 0px)) scale(0.985);
+    clip-path: inset(0 0 var(--clip-from, 0px) 0);
+  }
+  to {
+    transform: translateY(0) scale(1);
+    clip-path: inset(-80px);
+  }
+}
+
+/* 信封退场 = 「淡淡的向下消失」（用户点名要的效果）：
+   整体向下漂 20px 的同时淡出，像拆完的信封被随手放到一边。
+
+   ⚠️ 三个部件必须**各自**写（back / pocket / flap 分开），
+   不能把 .env__front 整个淡掉：opacity < 1 会让 .env__front 成为新的
+   层叠上下文，而它自身 z-index 是 auto —— 口袋(z3)与封盖(z6)会被
+   瞬间拍到信纸(z2)后面，信纸横线「啪」地盖到信封上。
+   分开写时每个部件都保留自己的 z-index，层叠顺序不变。 */
+.letter-env.is-open .env__back,
+.letter-env.is-open .env__pocket {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 620ms ease 1250ms,
+              transform 720ms var(--ease-out-quart) 1250ms;
+}
+
+/* 封盖翻到底后随信封一起淡掉（它已在 z1、信纸后面，原地淡即可，
+   20px 的漂移在它那个位置看不出来）。
+   ⚠️ transition 必须把 transform 一起写上：这条规则的特异性高于
+   .env__flap 基础规则，只写 opacity 会把「翻开」的过渡整个覆盖掉，
+   封盖会瞬间跳到 -168°（不转了）。 */
+.letter-env.is-open .env__flap {
+  opacity: 0;
+  transition: transform 900ms var(--ease-out-expo) 180ms,
+              opacity 620ms ease 1250ms;
+}
+
+/* 收信人早一点淡掉：它印在正面口袋上，信纸升上来时会叠在信纸上，
+   看着像"信里面印了收信人"，先让它退场更干净。 */
+.letter-env.is-open .env__to {
+  opacity: 0;
+  transition: opacity 380ms ease 640ms;
+}
+
+/* 提示语（「点一下，拆开这封信」）：一点拆就该退场。
+   原来跟着信封 1300ms 才淡，信纸都升起来了它还杵在下面 —— 过期信息。 */
+.letter-env.is-open .env__hint {
+  opacity: 0;
+  transition: opacity 400ms ease 250ms;
+}
+
+/* 预留空间收回：拆信后信封不在了，那 23.75% 的占位必须还回去，
+   否则情书卡片悬浮在偏上位置、下方一大片死区（连续帧里约 1/3 屏）。
+   用 transition 而不是直接置零 —— 居中的卡片会平滑落定约 33px，
+   与信封的下漂同一时段发生，眼睛读作「信封退场、信落定」。 */
+.letter-env.is-open {
+  animation: none;                 /* 拆信是干脆的动作，停止浮动 */
+  padding-bottom: 4%;
+  transition: padding-bottom 700ms var(--ease-out-quart) 1250ms;
+}
+
+.letter-env.is-open .env__front { pointer-events: none; }
+
+/* 减少动效：不做过渡，拆开即见。
+   ⚠️ .letter 的 transform/clip 复位只能写在 .is-open 上：
+   它的初值就是 translateY(var(--rise-from)) + clip（藏在信封里），
+   calm 档不走 letter-rise 动画，不复位的话拆完信纸还压在信封位置上。
+   但**不能无条件**写 [data-effects="calm"] .letter { transform:none } ——
+   那会让还没拆信时信纸就探到信封外面（合着状态也坏了）。 */
+[data-effects="calm"] .letter-env { animation: none; }
+[data-effects="calm"] .env__seal-half { transition: none; }
+[data-effects="calm"] .letter-env.is-cracking .env__seal-half { opacity: 0; }
+[data-effects="calm"] .letter-env.is-open .env__back,
+[data-effects="calm"] .letter-env.is-open .env__pocket,
+[data-effects="calm"] .letter-env.is-open .env__flap,
+[data-effects="calm"] .letter-env.is-open .env__to,
+[data-effects="calm"] .letter-env.is-open .env__hint { transition: none; }
+[data-effects="calm"] .letter-env.is-open { transition: none; }
+[data-effects="calm"] .letter-env.is-open .letter {
+  animation: none;
+  transform: none;
+  clip-path: none;
+}
+
+/* 纸纹必须与正文行高严格同周期。
+   原来固定 28px，而行高是 字号 x 1.95（17px 时约 33px）——
+   两套节奏错位，看起来像两张纸叠在一起，而不是字写在纸上。
+   周期跟着 --letter-fs 走，改字号时自动跟随。
+   起始偏移 = 上内边距 30px + 约 1.5 倍字号的基线位置。
+   线色从 11% 提到 20%：纸底色变深之后，原来的线几乎看不见了。 */
+.letter__paper {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+  pointer-events: none;
+  opacity: 1;
+  background-image:
+    repeating-linear-gradient(to bottom,
+      transparent 0,
+      transparent calc(calc(var(--letter-fs, 17px) * 1.95) - 1px),
+      color-mix(in srgb, var(--text-3) 20%, transparent) calc(calc(var(--letter-fs, 17px) * 1.95) - 1px),
+      color-mix(in srgb, var(--text-3) 20%, transparent) calc(var(--letter-fs, 17px) * 1.95));
+  background-position: 0 calc(30px + var(--letter-fs, 17px) * 1.52);
+}
+
+/* 情书正文必须左对齐。
+   .scene__inner.stack--center 带 text-align: center，会被继承下来 ——
+   写在横线纸上却居中对齐，读起来不像一封信，也和纸纹对不上。 */
+.letter__body {
+  position: relative;
+  text-align: left;
+  /* 手写体（v1.7.9）：这一幕要像她收到的一封手写信。
+     --hand 的兜底是衬线，缺字逐字退化，不会出方框。 */
+  font-family: var(--hand);
+  /* 情书正文用 --letter-fs（来源 config.letter.fontSize）——
+     横线纸的线距也是拿这个变量算的（见 .letter__paper），
+     所以改字号时纸纹会自动跟着走，不用另调。 */
+  font-size: var(--letter-fs, 17px);
+  /* 手写体的字面比宋体小一号，行距给宽一点才不挤 */
+  line-height: 1.95;
+  /* 手写字不会字字等距，稍微放一点字距更像手写；
+     0.02em 在 19px 下约 0.38px，只在长句里看得出松快 */
+  letter-spacing: 0.02em;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-break: strict;
+  min-height: 8em;
+}
+
+/* 划掉的文字（信稿里的 ~~...~~，见 letter.js 的 parseLetter）。
+   一横线划过，颜色不变 —— 手写改动就是这样：不是「淡化」，是「这一刀
+   划掉了，但还看得见写了什么」。线色比字色稍淡，像笔尖压下去的痕，
+   不像荧光笔。打字过程中 <s> 是逐字包进去的，光标始终跟着末尾走。 */
+.letter__body s {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--text) 62%, transparent);
+}
+
+/* 光标做成 2px 竖线块，比一个"|"字符更接近真实书写的停顿感 */
+.letter__caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.02em;
+  margin-left: 2px;
+  vertical-align: -0.16em;
+  background: var(--accent);
+  animation: caret-blink 1.06s step-end infinite;
+}
+
+@keyframes caret-blink { 50% { opacity: 0; } }
+
+/* 落款是全文唯一的强调色落点。
+   用 --accent-strong 而不是 --accent：后者在奶油底上只有 2.9:1，
+   13.5px 的字达不到 4.5:1。 */
+.letter__sign {
+  margin-top: 26px;
+  text-align: right;
+  /* 署名和正文同一支笔 */
+  font-family: var(--hand);
+  font-size: calc(15px * var(--fs));
+  color: var(--accent-strong);
+  opacity: 0;
+  transition: opacity var(--dur-ceremony) ease;
+}
+.letter__sign.is-in { opacity: 1; }
+
+/* --------------------------------------------------------------------------
+   幕 8 · 烟花与祝福
+   -------------------------------------------------------------------------- */
+
+.danmaku-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 弹幕词：只有文字 + 光晕，无底色无边框。
+   ⚠️ 原来这里给了一整套底色/边框/毛玻璃/内距，而文件**末尾**又逐条
+   置为 none / 0 覆盖掉 —— 相隔几百行、完全靠源码顺序取胜。改前面那个
+   的人会静默无效。唯一保留两份的只有 `color`（末尾用 --text 覆盖）
+   和 will-change（见下），已合并到下面这一处。 */
+.danmaku {
+  position: absolute;
+  white-space: nowrap;
+  font-size: calc(13px * var(--fs));
+  color: var(--text);
+  opacity: 0.72;
+  /* 描边颜色跟着主题走：亮底上用浅色晕开才不糊，暗底上才用深色投影 */
+  text-shadow: 0 1px 10px var(--text-halo);
+  /* ⚠️ will-change 不能常驻。弹幕节点每次 onEnter 都新建，最多 6 个并存
+     （此刻仍在飞）+ 已完成未回收的 = 常驻合成层。改由 JS 在创建时加、
+     动画结束时移除。 */
+}
+
+.final__foot {
+  margin-top: 34px;
+  text-align: center;
+  font-size: calc(13px * var(--fs));
+  color: var(--text-2);
+  line-height: 2;
+}
+
+.final__sign { font-family: var(--serif); color: var(--accent); }
+
+.final__btns {
+  display: flex;
+  /* ⚠️ 这个容器同时挂着 .reveal，而 .reveal 是 flex-direction:column ——
+     不显式拉回 row 的话两个按钮会竖着叠成一列（横排才是设计意图） */
+  flex-direction: row;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+/* --------------------------------------------------------------------------
+   照片灯箱
+   -------------------------------------------------------------------------- */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  /* 遮罩在独立的 .lightbox__scrim 层上：关闭时遮罩淡出、
+     飞回缩略图的 img 要保持不透明，所以本体不能再有整体 opacity 过渡 */
+  pointer-events: none;
+  /* 弹层里没有可滚动的东西：声明掉之后浏览器不再把手势接管成滚动，
+     触摸滑动才能完整地送到切图判定里（不然只有 pointercancel） */
+  touch-action: none;
+}
+
+.lightbox__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out-quart);
+}
+
+.lightbox.is-open { pointer-events: auto; }
+.lightbox.is-open .lightbox__scrim { opacity: 1; }
+
+/* 关闭过场：箭头和计数器先退场，画面里只留飞回缩略图的那张照片 */
+.lightbox.is-closing .lightbox__nav,
+.lightbox.is-closing .lightbox__count { opacity: 0; }
+.lightbox__nav, .lightbox__count { transition: opacity 180ms ease, transform var(--dur-fast) ease, color var(--dur-fast) ease; }
+
+/* 舞台：两张轮换的图叠在同一格里，perspective 撑起切换时的 3D 扭曲 */
+.lightbox__stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  perspective: 1100px;
+  padding: 24px;
+}
+
+.lb-img {
+  grid-area: 1 / 1;
+  max-width: 100%;
+  max-height: 82vh;
+  border-radius: var(--r-md);
+  will-change: transform, opacity;
+}
+
+.lb-img.is-hidden { opacity: 0; }
+
+/* 正位：入场从切换姿势弹回（贝塞尔带一点回弹，翻照片的手感就在这） */
+.lb-img.is-active {
+  opacity: 1;
+  transform: none;
+  transition: transform 640ms 110ms cubic-bezier(0.97, 0.13, 0.34, 1.15),
+              opacity 280ms 110ms ease-in;
+}
+
+/* 来图的起始姿势：侧后方 45° 扭着、退远一点（无过渡，直接摆好） */
+.lb-img.is-in-right {
+  opacity: 0;
+  transform: rotateY(24deg) translate3d(56%, 0, -280px);
+}
+.lb-img.is-in-left {
+  opacity: 0;
+  transform: rotateY(-24deg) translate3d(-56%, 0, -280px);
+}
+
+/* 旧图的离场姿势：坠向角落、带一点旋转地淡出 */
+.lb-img.is-out-left {
+  opacity: 0;
+  transform: translate3d(-34%, 26%, 0) rotate(-4deg);
+  transition: transform 560ms ease-in, opacity 460ms ease-in;
+}
+.lb-img.is-out-right {
+  opacity: 0;
+  transform: translate3d(34%, 26%, 0) rotate(4deg);
+  transition: transform 560ms ease-in, opacity 460ms ease-in;
+}
+
+/* 左右切换箭头：只有一组多张照片时出现 */
+.lightbox__nav {
+  position: absolute;
+  top: 50%;
+  width: 44px; height: 44px;
+  margin-top: -22px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-2);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+
+.lightbox__nav:hover { color: var(--text); transform: scale(1.06); }
+.lightbox__nav--prev { left: 14px; }
+.lightbox__nav--prev svg { transform: rotate(180deg); }
+.lightbox__nav--next { right: 14px; }
+
+/* 触屏设备：滑动就是切换，箭头反而挡照片 —— 藏掉，桌面端保留 */
+@media (pointer: coarse) {
+  .lightbox__nav { display: none; }
+}
+
+.lightbox:not(.has-multi) .lightbox__nav,
+.lightbox:not(.has-multi) .lightbox__count { display: none; }
+
+.lightbox__count {
+  position: absolute;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--mono);
+  font-size: calc(12px * var(--fs));
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+/* --------------------------------------------------------------------------
+   录入抽屉
+   -------------------------------------------------------------------------- */
+
+.drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.drawer__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  opacity: 0;
+  transition: opacity var(--dur-base) ease;
+}
+
+.drawer__panel {
+  position: relative;
+  width: min(100%, 520px);
+  max-height: 92vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  background: var(--surface-solid);
+  /* 底部抽屉需要最强的浮起感——它整块压在内容之上，
+     纯色底 + 1px 边框在手机上分不清边界。 */
+  box-shadow: var(--shadow-2xl);
+  padding: 20px 20px calc(24px + env(safe-area-inset-bottom));
+  transform: translateY(102%);
+  transition: transform 460ms var(--ease-out-expo);
+}
+
+/* 顶部抓手：移动端这个面板占满全屏宽度，没有抓手用户不知道能往上滑关闭
+   （原本只能点遮罩）。纯装饰，不参与交互。 */
+.drawer__panel::before {
+  content: '';
+  position: absolute;
+  left: 50%; top: 8px;
+  width: 36px; height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transform: translateX(-50%);
+}
+
+.drawer.is-open { pointer-events: auto; }
+.drawer.is-open .drawer__scrim { opacity: 1; }
+.drawer.is-open .drawer__panel { transform: none; }
+
+.drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.drawer__title { font-size: 16px; font-weight: 500; margin: 0; }
+
+.field { margin-bottom: 16px; }
+
+.field__label {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-2);
+  margin-bottom: 7px;
+}
+
+.field__input,
+.field__area {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  outline: 0;
+  transition: border-color var(--dur-fast) ease;
+}
+
+/* 聚焦反馈原来只改 border-color，在浅色输入框上太弱（尤其在手机上
+   键盘弹起时）。补一圈 --glow（陶土红的极浅版，themes.css 已有）。
+   刻意不加 outline —— 全局 :focus-visible 兜底已经有一圈了，
+   两层叠加会显得脏。 */
+.field__input:focus,
+.field__area:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--glow);
+  outline: none;
+}
+
+.field__area { min-height: 76px; resize: vertical; line-height: 1.6; }
+
+.field__row { display: flex; gap: 10px; }
+.field__row > * { flex: 1; min-width: 0; }
+
+.chips { display: flex; gap: 7px; flex-wrap: wrap; }
+
+.chip {
+  font-size: 12.5px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  /* 原来完全没有 transition，选中/取消是硬跳变，和全站其他控件的
+     节奏不一致；补上后与 .btn / .fp__view 同一套时长与缓动。 */
+  transition: color var(--dur-fast) var(--ease-in-out-soft),
+              background-color var(--dur-fast) var(--ease-in-out-soft),
+              border-color var(--dur-fast) var(--ease-in-out-soft),
+              transform var(--dur-instant) var(--ease-out-quart);
+}
+
+@media (hover: hover) {
+  .chip:not(.is-on):hover { background: var(--surface-2); color: var(--text); }
+}
+.chip:active { transform: scale(0.97); }
+.chip.is-on { background: var(--accent-strong); border-color: transparent; color: var(--on-accent); }
+
+/* --- 站内小弹窗（替换系统的 prompt / confirm） ------------------------- */
+
+.dlg {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.dlg__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  opacity: 0;
+  transition: opacity var(--dur-base) ease;
+}
+
+.dlg__panel {
+  position: relative;
+  width: min(100%, 320px);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--line);
+  background: var(--surface-solid);
+  padding: 22px 20px 18px;
+  box-shadow: 0 18px 48px rgba(20, 20, 19, 0.16);
+  opacity: 0;
+  transform: translateY(14px) scale(0.97);
+  transition: opacity var(--dur-base) ease, transform var(--dur-base) var(--ease-out-quart);
+}
+
+.dlg.is-open { pointer-events: auto; }
+.dlg.is-open .dlg__scrim { opacity: 1; }
+.dlg.is-open .dlg__panel { opacity: 1; transform: none; }
+
+.dlg__title {
+  margin: 0 0 16px;
+  font-size: calc(15px * var(--fs));
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.dlg__panel .field__input { margin-bottom: 16px; }
+
+.dlg__row { display: flex; gap: 10px; justify-content: flex-end; }
+.dlg__row .btn { min-width: 84px; }
+
+/* 危险操作按钮。原来写死 #C64F3F —— 全站唯一绕过主题令牌的按钮，
+   夜间主题下不跟随任何色。改用 --error（对比度 4.6:1，配白字可读）。 */
+.dlg__danger {
+  --btn-hover-bg: color-mix(in srgb, var(--error) 86%, var(--text));
+  --btn-ring: var(--error);
+  background-color: var(--error);
+}
+
+.dropzone {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  padding: 20px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) ease, background-color var(--dur-fast) ease;
+}
+
+.dropzone.is-over { border-color: var(--accent); background: var(--surface-2); }
+
+.dropzone__files { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+
+.thumb-chip {
+  position: relative;
+  width: 52px; height: 52px;
+  border-radius: var(--r-sm);
+  /* ⚠️ 原来这里有 overflow:hidden，把 .thumb-chip__x::after 撑出的 40px 热区
+     裁掉了：.thumb-chip__x 是 17px、位于 right:1，::after 居中后跨
+     x∈[22.5, 62.5]、y∈[-10.5, 29.5]，右侧与上方各被裁掉 10.5px，
+     实际热区不足 40px（注释里声称是 40px）。
+     裁切挪到 img 上（用 border-radius: inherit 保持同样的圆角），
+     父级不再裁，热区完整。 */
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.thumb-chip img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: inherit;   /* 裁切交给图片本身，父级保持 overflow:visible */
+}
+
+.thumb-chip__x {
+  position: absolute;
+  top: 1px; right: 1px;
+  width: 17px; height: 17px;
+  border-radius: 50%;
+  border: 0;
+  /* 原来写死 rgba(0,0,0,.55)，夜间主题下是个突兀的纯黑点。
+     改用 --scrim，跟随主题走。 */
+  background: var(--scrim);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+/* 17px 远小于可点尺寸 —— 伪元素把热区撑到 40px，视觉仍是 17px 的小圆点。 */
+.thumb-chip__x::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 40px; height: 40px;
+  transform: translate(-50%, -50%);
+}
+
+.spot-editor {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.spot-editor__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.autocomplete {
+  position: relative;
+}
+
+.autocomplete__list {
+  position: absolute;
+  left: 0; right: 0;
+  top: calc(100% + 4px);
+  z-index: 5;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface-solid);
+  max-height: 200px;
+  overflow-y: auto;
+  display: none;
+}
+
+.autocomplete__list.is-open { display: block; }
+
+.autocomplete__item {
+  padding: 10px 13px;
+  font-size: 13.5px;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  width: 100%;
+  text-align: left;
+}
+
+.autocomplete__item:hover { background: var(--surface-2); }
+.autocomplete__item small { color: var(--text-3); margin-left: 6px; font-size: 11.5px; }
+
+.upload-progress {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 顶部的提示条（微信环境、存储不可用等） */
+.notice {
+  position: fixed;
+  left: 50%;
+  top: calc(12px + env(safe-area-inset-top));
+  transform: translateX(-50%) translateY(-12px);
+  z-index: 100;
+  max-width: min(92vw, 460px);
+  padding: 11px 16px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--scrim);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  font-size: 13px;
+  color: var(--text);
+  /* --scrim 是半透明深色（clay 下 rgba(24,23,21,.42)），而 --text 是深墨
+     #141413 —— 深底深字，正文几乎读不出来。
+     弹幕 .danmaku 已经用 --text-halo 解决过同一个问题，这里沿用同一个令牌：
+     亮色主题下它是一圈浅色晕，恰好把字从深底上「捞」出来。 */
+  text-shadow: 0 1px 10px var(--text-halo);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-base) ease, transform var(--dur-base) var(--ease-out-quart);
+}
+
+.notice.is-on { opacity: 1; transform: translateX(-50%); }
+
+/* ==========================================================================
+   纸张颗粒
+   一张 64x64 的内联 SVG 噪点平铺，约 300 字节，不做任何滤镜运算。
+   固定覆盖整屏，不给 mix-blend-mode（会强制整页进入混合上下文，安卓很贵）。 */
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='64' height='64' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 64px 64px;
+  opacity: 0.03;
+}
+
+[data-theme="clay-night"] body::after { opacity: 0.045; }
+[data-effects="lite"] body::after { display: none; }
+
+/* ==========================================================================
+   字号缩放：已**就地**并入各处原始定义（原font-size 写成 calc(Npx * var(--fs))）。
+   --letter-fs 单独控制情书正文（来源 config.letter.fontSize）。
+   ⚠️ 不要再在这里重写一遍 —— 原先是「原始定义 + 文件末尾整块覆盖」的双写，
+   靠源码顺序取胜：改原始值毫无反应、想调缩放又得去翻到文件最底。
+   ========================================================================== */
+
+.field__label { font-size: calc(12.5px * var(--fs)); }
+.field__input,
+.field__area  { font-size: calc(15px * var(--fs)); }
+.drawer__title { font-size: calc(16px * var(--fs)); }
+
+/* 蛋糕幕的引导句（原先只在被删掉的末尾整块里，这里补回） */
+.cake-stage .lead { font-size: clamp(calc(15px * var(--fs)), calc(4.2vw * var(--fs)), calc(17px * var(--fs))); }
+
+/* 「直接看全文」：情书打字过程中出现，不想等就跳过 */
+/* 「直接看全文」现在挂 .btn .btn--ghost 复用按钮配方，
+   这里只保留它自己负责的两件事：位置与淡入。 */
+.letter__skip {
+  margin-top: 22px;
+  font-size: calc(12.5px * var(--fs));
+  color: var(--text-3);
+  opacity: 0;
+  /* ⚠️ opacity:0 不移出 tab 序列。这个按钮创建时就挂进 DOM，而 is-on 要等
+     start() 之后 2600ms —— 这期间键盘用户 Tab 到一个**完全看不见但会聚焦**
+     的按钮，:focus-visible 会在透明元素上画出焦点环、涟漪也在不可见处播放。
+     visibility 一起过渡，正好在淡入时出现、在淡出前先消失。 */
+  visibility: hidden;
+  transition: opacity var(--dur-base) var(--ease-out-quart),
+              visibility var(--dur-base) step-end,
+              color var(--dur-fast) var(--ease-in-out-soft),
+              background-color var(--dur-fast) var(--ease-in-out-soft),
+              transform var(--dur-instant) var(--ease-out-quart);
+}
+
+.letter__skip.is-on {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--dur-base) var(--ease-out-quart),
+              visibility 0s,
+              color var(--dur-fast) var(--ease-in-out-soft),
+              background-color var(--dur-fast) var(--ease-in-out-soft),
+              transform var(--dur-instant) var(--ease-out-quart);
+}
+.letter__skip:hover { color: var(--text-2); }
+
+/* 刮刮卡的「直接揭开」：键盘/读屏用户的替代路径。
+   刮卡唯一能揭示内容的方式是 pointer 驱动的 checkProgress，
+   而 canvas 无 tabindex、touch-action:none 又切断了该区域滚动 ——
+   纯键盘的视力用户永远刮不开。 */
+.scratch__skip {
+  margin-top: 4px;
+  font-size: calc(12.5px * var(--fs));
+  color: var(--text-3);
+  transition: opacity var(--dur-base) ease, visibility var(--dur-base) step-end;
+}
+.scratch__skip:hover { color: var(--text-2); }
+
+/* 券面揭开后把这一行收掉（v1.7.5）。
+   ⚠️ 三个坑叠在一起：
+   ① hidden 属性无效 —— .btn 写死 display:inline-flex，覆盖 [hidden] 的
+      浏览器默认 display:none（这就是券面都露出来了按钮还杵着的原因）。
+   ② 只加 opacity/visibility 不够 —— visibility:hidden 的元素**仍然占
+      布局空间**（实测按钮仍占 49px 高），券面下面留一块空白。
+   ③ grid-template-rows:0fr 也不行 —— .stack 的 gap 仍在参与，
+      且子项各自有高度来源（.btn 的 padding/line-height），
+      实测仍残留 28~30px。直接 display:none 最干脆：
+      这一行是纯装饰性操作入口，收起后没有内容要保留，
+      券面本身也不需要动画过渡（canvas 那边已经在淡出了）。 */
+.reveal.is-collapsed {
+  display: none;
+}
+
+/* 按钮自身的淡出 + 移出 tab 序列（0fr 收起期间不可聚焦） */
+.scratch__skip {
+  margin-top: 4px;
+  font-size: calc(12.5px * var(--fs));
+  color: var(--text-3);
+  transition: opacity var(--dur-base) ease, visibility var(--dur-base) step-end;
+}
+.scratch__skip:hover { color: var(--text-2); }
+.scratch__skip.is-gone {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--dur-base) ease, visibility 0s;
+}
+
+/* 操作提示（"用手指刮开"）同理：券面已露出，这条就是过期信息 */
+.scratch__subhint {
+  font-size: calc(12.5px * var(--fs));
+  transition: opacity var(--dur-base) ease, visibility var(--dur-base) step-end;
+}
+.scratch__subhint.is-gone {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--dur-base) ease, visibility 0s;
+}
+
+/* ==========================================================================
+   lite 档：无毛玻璃时的补偿
+   --glass 已在上方整体置为 none。灯箱与通知条原本是半透明**深色**遮罩，
+   去掉模糊后背后的内容会生硬地透出来，这里换成不透明遮罩。
+   ⚠️ 别把 .map__tip / .map__hint 拉进来 —— 它们是**浅色**控件
+      （--surface 底，与 .map__zb / .dock__btn 同一套语言），
+      套上深色 --scrim-solid 会在浅色地图上变成一块黑饼（v1.7.5 踩过）。
+   ========================================================================== */
+
+[data-effects="lite"] .lightbox__scrim,
+[data-effects="lite"] .notice {
+  background: var(--scrim-solid);
+}
+
+
+/* ==========================================================================
+   P2 · 逐幕改造
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   日间卡片的浮起
+   --surface (#FFFCF7) 与底色 (#FAF9F5) 只差约 2% 亮度，卡片几乎看不出浮起，
+   全靠一条细边框撑着。加一层很淡的静态阴影。
+   box-shadow 不涉及 backdrop-filter，静态阴影也不会在滚动时反复重绘。
+   -------------------------------------------------------------------------- */
+
+/* 卡片浮起。
+   ⚠️ 原来写的是 [data-theme="clay"] .trip，夜间主题下整个卡片系统完全没有
+   阴影 —— 而 night 的 --surface 与 --bg 亮度差同样只有约 2%，
+   卡片就成了「贴」在底上的一块。--shadow-* 本就是 rgba(var(--shadow-color),…)
+   参数化的，night 的 --shadow-color 是 0,0,0，直接可用，去掉主题前缀即可，
+   **零配色改动**。 */
+.trip { box-shadow: var(--shadow-sm); }
+.trip.is-open { box-shadow: var(--shadow-md); }
+
+/* （日间进度点的覆盖样式随进度点一起去掉了，v1.2.9） */
+
+/* --------------------------------------------------------------------------
+   逐幕氛围
+
+   两件事在这里配，都只改 base.css 定义好的变量，不重复写实现：
+
+   1) --lift       这一幕的背景暖意强弱（base.css 的 .scene 用它做两层渐变）。
+      ⚠️ 各幕只在同一档内浮动（1.5%~3% 之间），**不要拉到差距过大** ——
+      用户已明确取消过逐幕明暗跳变（themes.css 有记录），一旦对比明显
+      就会重新变成「一段一变」，滚动时很碎。
+
+   2) --reveal-x / --reveal-y  这一幕的入场元素从哪个方向来。
+      九幕全用同一种自下而上会像在读同一份模板；换轴向是成本最低的破除方式。
+
+   解锁门（scene-unlock）**刻意不配**：它是首屏，输入框晚半秒出现会被
+   误读成「没加载出来」，不如保持一进门就能打字。
+   -------------------------------------------------------------------------- */
+
+#scene-hero      { --lift: var(--bg-lift-3); }
+#scene-opening   { --lift: var(--bg-lift-2); --reveal-x: -14px; --reveal-y: 0; }
+#scene-scratch   { --lift: var(--bg-lift-2); --reveal-y: 24px; }  /* 最大，像揭幕 */
+#scene-puzzle    { --lift: var(--bg-lift-2); --reveal-y: 20px; }  /* 稍大，卡片落定感 */
+#scene-cake      { --lift: var(--bg-lift-3); --reveal-y: 26px; }
+#scene-letter    { --lift: var(--bg-lift-2); --reveal-x: 12px; --reveal-y: 0; }
+#scene-fireworks { --lift: var(--bg-lift-3); --reveal-x: 14px; --reveal-y: 0; }
+
+/* 旅行足迹是唯一内容自溢的长幕（.scene--flow），层次取最淡一档，
+   免得长页面一直「亮着顶部」，看久了累。 */
+#scene-footprints { --lift: var(--bg-lift-1); --reveal-y: 10px; }
+
+/* --------------------------------------------------------------------------
+   光晕
+   只挂在三幕上。常驻光晕会让每次滚动都重绘一整层径向渐变。
+   -------------------------------------------------------------------------- */
+
+.scene--halo::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--halo-warm);
+  animation: halo-breathe 8s var(--ease-in-out-soft) infinite;
+}
+
+@keyframes halo-breathe {
+  0%, 100% { transform: scale(1);    opacity: 0.72; }
+  50%      { transform: scale(1.07); opacity: 1; }
+}
+
+/* --------------------------------------------------------------------------
+   幕 6 · 蛋糕
+   -------------------------------------------------------------------------- */
+
+.cake-stage { perspective: 800px; }
+
+.cake { transform-style: preserve-3d; }
+
+/* 加了 rotateX 之后奶油层的边缘会出锯齿 */
+.cake__body { backface-visibility: hidden; }
+
+.cake__plate { transform: rotateX(6deg); transform-origin: 50% 100%; }
+
+/* 烛火的光晕。原来火苗只在原地摆动，没有光，看着像贴纸。 */
+.flame::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 78px;
+  height: 78px;
+  margin: -39px 0 0 -39px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 184, 107, 0.44), transparent 68%);
+  animation: flame-glow 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes flame-glow {
+  from { opacity: 0.55; transform: scale(0.9); }
+  to   { opacity: 1;    transform: scale(1.12); }
+}
+
+.flame.is-out::before { opacity: 0; animation: none; }
+
+/* 吹灭之后蛋糕整体回正，配合火焰熄灭 */
+.cake-stage.is-lit .cake__plate { transform: rotateX(0deg); }
+
+/* --------------------------------------------------------------------------
+   幕 3 · 时间线
+   原来只有 data-fade 的三档衰减，记录一多就是一根没有层次的长线。
+   补上年份分隔；卡片按 60ms 递增错峰入场，上限 400ms。
+   -------------------------------------------------------------------------- */
+
+.tl__year {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 24px 0 14px;
+  font-size: calc(11.5px * var(--fs));
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.tl__year:first-of-type { margin-top: 0; }
+
+.tl__year::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, var(--line-strong), transparent);
+}
+
+.tl__item {
+  animation: tl-in var(--dur-slow) var(--ease-out-expo) both;
+  animation-delay: calc(min(var(--i, 0) * 60ms, 400ms));
+}
+
+@keyframes tl-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* --------------------------------------------------------------------------
+   幕 4 · 刮刮卡
+   -------------------------------------------------------------------------- */
+
+/* ⚠️ 不要写 [data-theme="clay"] 前缀。2250-2254 的注释明确说：
+   .trip 原来写死了这个前缀，导致切到 clay-night 时阴影整个消失、
+   卡片体系视觉不一致 —— 已去掉。这里新增的却是同一个模式，
+   会让刮刮卡在夜间失去全部浮起（周围卡片却有 --shadow-sm）。 */
+.scratch { box-shadow: var(--shadow-2xl); }
+
+/* --------------------------------------------------------------------------
+   幕 8 · 烟花与祝福
+   弹幕原本是半透明胶囊，和烟花的光感对不上，像贴了一排标签。
+   去掉边框与毛玻璃，改成纯文字 + 文字阴影，让烟花透过来。
+   -------------------------------------------------------------------------- */
+
+/* 弹幕的最终外观已并入上面那处 .danmaku，这里只留 .final__btns。
+   ⚠️ 这条 z-index:3 其实是无效补丁：.scene__inner 已经是
+   position:relative; z-index:1（自成形层叠上下文），而 .danmaku-layer
+   同样是 z-index:1 且 DOM 在前 —— 弹幕本来就渲染在文字之下。
+   按钮不被盖住靠的是 DOM 顺序，不是这个 z-index。
+   真正该做的是把跨组件的层级规范化，见 themes.css 里的 --z-* 档位。 */
+.final__btns { position: relative; }
+
+/* ==========================================================================
+   桌面端适配（v1.8.4）
+   前面所有尺寸都是按手机定的：内容列 560~640px、拼图 340px、刮刮卡 380px。
+   这些在 1440px 的桌面上全挤在正中间一条，左右大片留白。
+   这里统一收口，不碰上面的原始定义 —— 手机一行都不变。
+   断点取 1024px：iPad 竖屏（768/834）仍走手机布局，横屏（1024+）算桌面。
+   ========================================================================== */
+@media (min-width: 1024px) {
+
+  /* 交互组件整体放大 —— 手机上「一屏一个主角」的尺寸在桌面上像缩略图 */
+  .puzzle   { width: min(100%, 460px); }
+  .scratch  { width: min(100%, 500px); }
+  .letter-env { width: min(100%, 540px); }
+
+  /* 3D 蛋糕：桌面画布跟着视口高走（ vh 而不是 vw —— 86vw 在 1440 宽的
+     屏幕上是 1200px，早被 max-width 卡死，等于白算 ）。
+     吹灭后收矮让位给文字的比例同步放大。 */
+  .cake3d { max-width: 680px; height: min(72vh, 660px); }
+  .cake-stage.has-3d.is-done .cake3d { max-width: 680px; height: min(50vh, 360px); }
+  .cake { width: min(30vw, 320px); }        /* WebGL 不可用时的平面降级版 */
+
+  /* 解锁门：输入字号与按钮跟着放大一档，下划线拉得更宽更稳 */
+  .unlock__input { font-size: 24px; }
+  .unlock__go { width: 48px; height: 48px; }
+
+  /* 行程卡：padding 放宽，迷你照片堆也更有存在感 */
+  .trip { padding: 16px 18px; }
+  .photo-grid { gap: 8px; }
+
+  /* 灯箱：桌面屏幕大，照片不必贴边 */
+  .lightbox__nav--prev { left: 24px; }
+  .lightbox__nav--next { right: 24px; }
+}
+
+/* 悬停反馈：只给真正有鼠标的设备（hover:none 的触屏加了也看不见，
+   反而和 :active 的按压效果打架） */
+@media (min-width: 1024px) and (hover: hover) {
+  /* 行程卡：整卡可点，悬停时轻轻浮起 + 边框变实，
+     与 .trip:active 的按压缩小形成「浮起→按下」的完整反馈 */
+  .trip:hover {
+    border-color: var(--line-strong);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* 照片：悬停轻微放大，暗示可以点开看大图 */
+  .photo img { transition: transform 420ms var(--ease-out-quart); }
+  .photo:hover img { transform: scale(1.05); }
+
+  /* 拼图块：悬停描一圈细边，比「点两下交换」的文案更早告诉用户这是可点的 */
+  .puzzle__tile:not(.is-picked):hover {
+    box-shadow: 0 0 0 2px var(--line-strong);
+  }
+}

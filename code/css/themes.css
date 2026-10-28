@@ -1,0 +1,247 @@
+/* ==========================================================================
+   设计令牌 · 一套配色，两个模式
+   切换方式：<html data-theme="clay|clay-night">
+   效果分组：<html data-effects="full|lite|calm">
+     full  → 允许 Canvas 粒子、毛玻璃、视差
+     lite  → 安卓中端机档：不创建 Canvas，毛玻璃换实色，视差减弱
+     calm  → 用户要求减少动效：只保留透明度过渡
+
+   ⚠️ 有六个变量名被 JS 直接读取，改名会静默失效（不报错，Canvas 会退回旧色）：
+        --bg  --text  --accent  --accent-2  --text-3
+      读取点：js/lib/fx.js、js/lib/theme.js、js/components/mapview.js、
+              js/scenes/puzzle.js、js/scenes/scratch.js
+      其余变量无 JS 依赖，可自由调整。
+
+   色板来源：参考 awesome-design-md-main/design-md/claude/DESIGN.md
+   有意偏离一处 —— 参考规范用白字配 #CC785C 做按钮，实测只有 3.28:1 未达 AA，
+   本方案把按钮填充压深到 #B35F42（4.53:1），原色只用于装饰性色块。
+   ========================================================================== */
+
+:root {
+  /* ---------- 字族 ---------- */
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC",
+          "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+  /* 自托管子集排在最前，保证安卓上也能拿到衬线。
+     "Songti SC" 只有苹果系有，安卓不存在 —— 排在前面会让安卓整站中文退化成无衬线。 */
+  --serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, Georgia, serif;
+  /* 情书手写体（v1.7.9）。只给情书正文/署名/收信人用。
+     兜底必须是 --serif —— 手写体子集只有信里那些字，
+     缺字时逐字退回衬线，不会出现方框。 */
+  --hand: "Letter Hand", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+
+  /* ---------- 缓动标尺 ---------- */
+  --ease-out-expo:    cubic-bezier(0.16, 1, 0.30, 1);   /* 入场、大位移 */
+  --ease-out-quart:   cubic-bezier(0.22, 1, 0.36, 1);   /* 通用出场 */
+  --ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1); /* 按压回弹、卡片刻度 */
+  --ease-in-out-soft: cubic-bezier(0.40, 0, 0.20, 1);   /* 颜色、透明度 */
+  --ease-ceremony:    cubic-bezier(0.65, 0, 0.35, 1);   /* 场景转场、点灯、吹蜡烛 */
+
+  /* ---------- 时长标尺 ---------- */
+  --dur-instant:  90ms;    /* 按压反馈 */
+  --dur-fast:     160ms;   /* hover、描边、颜色 */
+  --dur-base:     280ms;   /* 卡片展开、抽屉、提示条 */
+  --dur-slow:     480ms;   /* 滚动入场、拼图换位 */
+  --dur-ceremony: 900ms;   /* 解锁光晕、吹蜡烛、场景转场 */
+  --dur-epic:     1600ms;  /* 烟花齐射、点灯、落款浮现 */
+
+  /* ---------- 圆角 ---------- */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+
+  /* ---------- 间距 ---------- */
+  --gap: 16px;
+  --pad: 24px;
+
+  /* ---------- 毛玻璃 ----------
+     整站只有这一个值，组件统一写 backdrop-filter: var(--glass)。
+     lite 档（安卓中端机）把它整体置为 none，不必逐个组件写分支。 */
+  --glass: blur(14px) saturate(1.4);
+
+  /* ---------- 背景层次 ----------
+     三档「比底色暖一点」的层次，全部由 --bg 派生 —— 所以 night 主题
+     零维护，不用为深色再写一套。
+
+     color-mix(in oklab, A 97%, B) = A 占 97%、B 占 3%。掺3% 的陶土红
+     进奶油底，得到极微暖的米色。**不引入新色相**，因为陶土红本身就是
+     本站的强调色。
+
+     用 oklab 而不是 srgb：srgb 在感知距离较远的两色之间插值会经过灰点，
+     那正是「显脏」的机制。oklab 的感知插值能避开中段发灰。
+     （情书幕的纸材质仍用 in srgb —— 那里混合的是 --surface 与 --text-3，
+      两者都是低饱和暖灰、OKLab 距离极近，换不换色差肉眼不可见，
+      不值得为它引入风险。） */
+  --bg-lift-1: color-mix(in oklab, var(--bg) 97%, var(--accent));  /* 极轻暖意 */
+  --bg-lift-2: color-mix(in oklab, var(--bg) 94%, var(--accent));
+  --bg-lift-3: color-mix(in oklab, var(--bg) 91%, var(--accent));
+
+  /* ---------- 纸材质（从情书幕上提为全局）----------
+     原来只定义在 .letter-env 上，现在抽出来给按钮等小面积组件复用。
+     全部由 --text-3 / --text 驱动，night 主题自动跟随。
+
+     只给「一张纸」级别的表面用（按钮、信封），**不要给 .card** ——
+     卡片数量多，全加会读成脏而不是纸。 */
+
+  /* ⚠️ 纸面高光。纸的折痕、封盖斜边、蜡封边缘厚度这些「亮边」在日间是白色，
+     但 clay-night 的 --surface 是深色 —— 原来 10 处直接写死 #fff，
+     结果深色纸上出现**压亮的白边**，是全站最明显的「颜色不对」。
+     用 --text 派生：日间 --text 是近黑→混出的是灰白高光（需另配），
+     所以正确做法是单独定义一个随主题翻转的量：日间纯白、夜间是浅色晕
+     （夜间纸面深，边缘受光处本就该偏亮，用近白反而会与纸面同化）。
+     这里给两套：--paper-hi（强高光）与 --paper-hi-soft（弱高光）。 */
+  --paper-hi: #fff;
+  --paper-hi-soft: color-mix(in srgb, #fff 70%, var(--surface));
+
+  --paper-fibre:  /* 双向极细条纹模拟纤维。透明度必须 < 3%，
+                     再高就成了「加了张噪点图」而不是纸。
+                     用 repeating-linear-gradient 而不是 feTurbulence：
+                     前者是纯栅格图案浏览器直接平铺（零滤镜运算），
+                     后者是浏览器实时计算，中端手机会掉到 30fps。 */
+    repeating-linear-gradient(94deg,
+      color-mix(in srgb, var(--text-3) 3%, transparent) 0 1px,
+      transparent 1px 4px),
+    repeating-linear-gradient(4deg,
+      color-mix(in srgb, var(--text-3) 2.2%, transparent) 0 1px,
+      transparent 1px 6px);
+  --paper-edge:   /* 边缘厚度：上沿高光 + 下沿内阴影 + 一圈淡暗 */
+    inset 0 1px 0 color-mix(in srgb, var(--paper-hi) 34%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--text) 9%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+/* lite 档：关掉全部毛玻璃，避免安卓上强制创建离屏合成层 */
+[data-effects="lite"] {
+  --glass: none;
+}
+
+/* ==========================================================================
+   日间 · 陶土纸
+   奶油纸底 + 陶土红 + 深墨文字。暖底是刻意的：纯白属于通用工具，
+   暖调才像一本手作相册，照片放在上面也更透亮。
+   ========================================================================== */
+
+[data-theme="clay"] {
+  --scheme: light;
+
+  /* 表面层级：底色 → 卡片（升一档）→ 次级容器（降一档） */
+  --bg: #FAF9F5;
+  --bg-soft: #F5F0E8;
+  --surface: #FFFCF7;
+  --surface-2: #EFE9DE;
+  --surface-solid: #FFFCF7;
+
+  /* 文字：对比度对 --bg 实算 */
+  --text: #141413;      /* 17.5:1 */
+  --text-2: #3D3D3A;    /* 10.3:1 */
+  --text-3: #6C6A64;    /*  5.1:1 */
+  --text-4: #8E8B82;    /*  3.2:1 仅用于 ≥19px 或纯装饰，禁止做正文 */
+
+  /* 强调：陶土红 */
+  --accent: #CC785C;          /* 2.9:1  图形、描边、光点、色块 */
+  --accent-strong: #B35F42;   /* 4.5:1  按钮填充，配白字 */
+  --accent-soft: #F2E2D9;     /* 选中态背景 */
+  --accent-2: #D9A05B;        /* 蜜金，彩带与渐变的第二色 */
+  --on-accent: #FFFFFF;       /* 只用于 --accent-strong 之上 */
+  --ink-on-warm: #1A1209;     /* 5.7:1  必须放在 --accent 上的小字改用这个 */
+
+  /* 线条与遮罩 */
+  --line: rgba(20, 20, 19, 0.10);
+  --line-strong: rgba(20, 20, 19, 0.18);
+  --scrim: rgba(24, 23, 21, 0.42);
+  --scrim-solid: rgba(24, 23, 21, 0.90);   /* lite 档无毛玻璃时改用它 */
+
+  /* 压在画面/照片上的文字描边。亮底要浅色晕开，深色投影只会糊成一团 */
+  --text-halo: rgba(250, 249, 245, 0.92);
+
+  /* 光晕 */
+  --glow: rgba(204, 120, 92, 0.16);
+  --halo-warm: radial-gradient(circle at 50% 40%, rgba(204, 120, 92, 0.14), transparent 62%);
+
+  /* 语义色：文字可用版（填充版另给，仅用于状态点与图标） */
+  --success: #3F7A4E;   /* 4.9:1 */
+  --warning: #7A5C0E;   /* 5.9:1 */
+  --error: #C64545;     /* 4.6:1 */
+  --info: #2E6B60;      /* 5.4:1 */
+  --success-fill: #5DB872;
+  --warning-fill: #D4A017;
+  --error-fill: #EF6B6B;
+
+  /* 阴影：基色是暖墨而不是纯黑，否则在奶油底上发灰 */
+  --shadow-color: 24, 23, 21;
+}
+
+/* ==========================================================================
+   夜间 · 烛光墨
+   只在用户主动切换主题时启用（<html data-theme="clay-night">）。
+   原先还有第二种用法：给某一幕的 <section> 加 .scene--dark 做局部深墨面板。
+   已按用户要求取消 —— 逐幕明暗跳变配合滚动显得很碎，全站统一亮色。
+   ========================================================================== */
+
+[data-theme="clay-night"] {
+  --scheme: dark;
+
+  --bg: #181715;
+  --bg-soft: #1F1E1B;
+  --surface: #252320;
+  --surface-2: #2E2B27;
+  --surface-solid: #252320;
+
+  --text: #FAF9F5;      /* 17.0:1 */
+  --text-2: #A09D96;    /*  6.6:1 */
+  --text-3: #8E8B82;    /*  5.3:1 */
+  --text-4: #6C6A64;    /*  3.3:1 仅装饰 */
+
+  --accent: #E08D6B;          /* 烛光橙，6.1:1 */
+  --accent-strong: #CC785C;   /* 4.9:1 */
+  --accent-soft: #3A2A22;
+  --accent-2: #F0C27A;        /* 暖金，烟花与彩带的第二色 */
+  --on-accent: #1A1209;
+  --ink-on-warm: #1A1209;
+
+  --line: rgba(250, 249, 245, 0.12);
+  --line-strong: rgba(250, 249, 245, 0.22);
+  --scrim: rgba(12, 11, 10, 0.72);
+  --scrim-solid: rgba(12, 11, 10, 0.94);
+
+  /* 夜间纸面深（#252320），边缘受光处该是一层**浅晕**而不是纯白 ——
+     纯白压在深纸上会读成「压了一道亮边」，这正是原来 10 处硬编码
+     #fff 在夜间最刺眼的地方。压到很淡，与纸面同族。 */
+  --paper-hi: rgba(250, 249, 245, 0.22);
+  --paper-hi-soft: rgba(250, 249, 245, 0.12);
+
+  /* 暗底上反过来：要深色投影把文字从背景里托起来 */
+  --text-halo: rgba(0, 0, 0, 0.55);
+
+  --glow: rgba(224, 141, 107, 0.22);
+  --halo-warm: radial-gradient(circle at 50% 40%, rgba(224, 141, 107, 0.20), transparent 62%);
+
+  --success: #7FC28E;
+  --warning: #E0B65A;
+  --error: #EF8A8A;
+  --info: #7FC3B6;
+  --success-fill: #5DB872;
+  --warning-fill: #D4A017;
+  --error-fill: #EF6B6B;
+
+  --shadow-color: 0, 0, 0;
+}
+
+/* ==========================================================================
+   阴影体系
+   只在「浮起」语义时使用：展开、抽屉、灯箱。
+   常规卡片不加阴影 —— 层级由表面色差承担，安卓上滚动不做阴影重绘。
+   ========================================================================== */
+
+:root {
+  --shadow-sm:  0 1px 2px rgba(var(--shadow-color), 0.05);
+  --shadow-md:  0 2px 6px rgba(var(--shadow-color), 0.07),
+                0 1px 2px rgba(var(--shadow-color), 0.05);
+  --shadow-lg:  0 8px 20px rgba(var(--shadow-color), 0.09),
+                0 2px 6px rgba(var(--shadow-color), 0.05);
+  --shadow-xl:  0 16px 36px rgba(var(--shadow-color), 0.12),
+                0 4px 10px rgba(var(--shadow-color), 0.06);
+  --shadow-2xl: 0 28px 60px rgba(var(--shadow-color), 0.16),
+                0 8px 18px rgba(var(--shadow-color), 0.08);
+}
